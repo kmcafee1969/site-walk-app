@@ -16,12 +16,14 @@ export default async function handler(req, res) {
     }
 
     // Verify PIN
-    // PIN is now loaded from Environment Variable for security
-    // We use .trim() to safely handle accidental whitespace/newlines from env vars
-    const CORRECT_PIN = (process.env.APP_PIN || '2025').trim();
-    const userPin = req.headers['x-auth-pin'];
-    console.log(`PIN Check: Received='${userPin}', Expected='${CORRECT_PIN}'`); // Improved logging
-    if (userPin !== CORRECT_PIN) {
+    // Allow either the Environment Variable PIN OR the default '2025' to prevent lockout
+    const envPin = (process.env.APP_PIN || '').trim();
+    const hardcodedPin = '2025';
+    const userPin = (req.headers['x-auth-pin'] || '').trim();
+
+    console.log(`PIN Check: Received='${userPin}'`);
+
+    if (userPin !== hardcodedPin && (envPin === '' || userPin !== envPin)) {
         return res.status(401).json({ error: `Unauthorized: Invalid PIN. Received: '${userPin}'` });
     }
 
