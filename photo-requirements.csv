@@ -1,0 +1,84 @@
+PhotoReqID,Category,PhotoName,PhotoDescription
+OC1,Overall Compound,Overall Compound 1,Photo of site walk document / folder with site ID (This should always be your first photo)
+OC2,Overall Compound,Overall Compound 2,Compound from ground level (ALL sides & surrounding area)
+OC3,Overall Compound,Overall Compound 3,At least (1) photo of overall tower (Photos facing each subject carrier sector preferred)
+OC4,Overall Compound,Overall Compound 4,"Zoom in on each antenna sector for subject carrier ONLY (Straight on & from each side of antenna mount, all sectors)"
+OC5,Overall Compound,Overall Compound 5,"Site signage (Site number, FCC number - Warning signage is not needed)"
+OC6,Overall Compound,Overall Compound 6,Stand inside corners of compound - Take (3) pics: Looking down fence line (both directions) & middle of compound
+UD1,Utility Demarcs,Utility Demarcs 1,All shared utility h-frames inside/outside compound ( All sides & close-ups of equipment attached)
+UD2,Utility Demarcs,Utility Demarcs 2,"Fiber Demarc/Meet-me-point (Illustrate on site sketch, obtain coordinates; Detailed & overall pictures) (If applicable)"
+UD3,Utility Demarcs,Utility Demarcs 3,Fiber demarc coordinates & brief description of type/location:
+UD4,Utility Demarcs,Utility Demarcs 4,"Transformer including information tag (nameplate) and rating (Pad, vault, or pole mounted)"
+UD5,Utility Demarcs,Utility Demarcs 5,Power lines/conduits running from transformer to site (If possible/applicable)
+UD6,Utility Demarcs,Utility Demarcs 6,Meter w/ label & Photo of Disconnect Breaker or fuse rating (Should be next to meter w/ size indicated on breaker switch)
+SCLA1,Subject Carrier Lease Area,Subject Carrier Lease Area 1,Overall platform/pad/shelter view (Should provide a general view of all equipment)
+SCLA2,Subject Carrier Lease Area,Subject Carrier Lease Area 2,Profile view of all (4) sides of equipment platform/pad/shelter (Should be as clear and unobstructed as possible)
+SCLA3,Subject Carrier Lease Area,Subject Carrier Lease Area 3,Carrier H-frame (Views from ALL sides and close-up views of equipment that is attached) (When present)
+SCLA4,Subject Carrier Lease Area,Subject Carrier Lease Area 4,Carrier Telco: Telco board/Ciena/AAV & related junctions boxes (May vary by site. Can be inside shelter/on h-frame)
+SCLA5,Subject Carrier Lease Area,Subject Carrier Lease Area 5,Ice Bridge/Cable Trays/Conduit Runs to tower from subject carrier equipment (Capture labels printed on cables)
+SCLA6,Subject Carrier Lease Area,Subject Carrier Lease Area 6,"Ice Bridge posts (Show where they’re located on pad/platform, if applicable) Put distance between posts on sketch"
+SCLA7,Subject Carrier Lease Area,Subject Carrier Lease Area 7,Radios/System Modules (Multiple views so mounts/grounding/cabling is visible)
+SCLA8,Subject Carrier Lease Area,Subject Carrier Lease Area 8,Photograph space(s) within subject carrier lease area where equipment will fit (When SOW is adding equipment)
+SCLA9,Subject Carrier Lease Area,Subject Carrier Lease Area 9,"All cabinets on pads/platforms/shelters (Get overall photo, zoomed in photos of ALL internals including make/model, BBUs, rack mounted equipment, etc.)
+ PLEASE GET INSIDES OF CABINETS & CAPTURE RECTIFIERS/CONVERTERS/BREAKERS/EMPTY SLOTS/BATTERIES…etc."
+EL1,Electrical,Electrical 1,"Any and all ground bars associated with subject carrier (At Radios, at tower, under ice bridge, on h-frame, in shelter, etc.)"
+EL2,Electrical,Electrical 2,"Inside of DC Power Plant: Converters, rectifiers, batteries, empty slots, digital ready outs, power distribution units (PDU), other equipment."
+EL3,Electrical,Electrical 3,Manufacturer sticker on multi-meter gang bank/trough. Usually indicates the incoming service on site; very important. (if not a stand alone meter)
+EL4,Electrical,Electrical 4,Shelter sites: HVAC nameplate/sticker for subject carrier only. Other carrier's HVAC info not needed.
+AEL1,Additional Electrical,Additional Electrical 1,Meter Bank with labeling and carrier/tenant name (Close up of existing tenant meter- meter number visible)
+AEL2,Additional Electrical,Additional Electrical 2,"Manual Disconnect(s): Overall view, and nameplate photo of voltage/amperage/make"
+AEL3,Additional Electrical,Additional Electrical 3,Automatic Transfer Switch (ATS)/Manual Transfer Switch (MTS may be within integrated PPC)
+AEL4,Additional Electrical,Additional Electrical 4,Existing PPC (Breaker Panel) (Be sure to get inside: Clear photos of panel schedule/breaker sizes/empty slots/labeling)
+AEL5,Additional Electrical,Additional Electrical 5,PPC generator plug/stand-alone gen plug (If present)
+AEL6,Additional Electrical,Additional Electrical 6,Generator: Overall and zoomed in
+AEL7,Additional Electrical,Additional Electrical 7,Generator name plate and detailed photos (If applicable) (Be sure to get voltage/phase/kW rating)
+OC1LA1,Other Carrier's Existing Lease Areas #1,Other Carrier's Existing Lease Areas #1_1,Overall view of each carrier’s lease space (Provide multiple images to aid in perspective if possible)
+OC1LA2,Other Carrier's Existing Lease Areas #1,Other Carrier's Existing Lease Areas #1_2,"Four photos of equipment pad – one from each side (Make sure all cabinets are visible, no need to zoom on them)"
+OC1LA3,Other Carrier's Existing Lease Areas #1,Other Carrier's Existing Lease Areas #1_3,H-frame(s) (Overall photos for location reference) (If applicable)
+OC1LA4,Other Carrier's Existing Lease Areas #1,Other Carrier's Existing Lease Areas #1_4,AAV equipment: Cienas/AAV/telco cabs
+OC1LA5,Other Carrier's Existing Lease Areas #1,Other Carrier's Existing Lease Areas #1_5,Junction box(es)
+OC1LA6,Other Carrier's Existing Lease Areas #1,Other Carrier's Existing Lease Areas #1_6,Ice Bridge/cable tray/ladder (Overall photos showing their locations)
+OC1LA7,Other Carrier's Existing Lease Areas #1,Other Carrier's Existing Lease Areas #1_7,"Ice Bridge posts (Showing where they’re located within compound, if applicable & especially if close to lease area)"
+OC1LA8,Other Carrier's Existing Lease Areas #1,Other Carrier's Existing Lease Areas #1_8,Meter Bank with labeling and carrier/tenant name
+OC1LA9,Other Carrier's Existing Lease Areas #1,Other Carrier's Existing Lease Areas #1_9,Manual Disconnect(s)
+OC1LA10,Other Carrier's Existing Lease Areas #1,Other Carrier's Existing Lease Areas #1_10,Automatic Transfer Switch (ATS)/Manual Transfer Switch (MTS may be within integrated PPC)
+OC1LA11,Other Carrier's Existing Lease Areas #1,Other Carrier's Existing Lease Areas #1_11,PPC (Breaker Panel) exterior
+OC2LA1,Other Carrier's Existing Lease Areas #2,Other Carrier's Existing Lease Areas #2_1,Overall view of each carrier’s lease space (Provide multiple images to aid in perspective if possible)
+OC2LA2,Other Carrier's Existing Lease Areas #2,Other Carrier's Existing Lease Areas #2_2,"Four photos of equipment pad – one from each side (Make sure all cabinets are visible, no need to zoom on them)"
+OC2LA3,Other Carrier's Existing Lease Areas #2,Other Carrier's Existing Lease Areas #2_3,H-frame(s) (Overall photos for location reference) (If applicable)
+OC2LA4,Other Carrier's Existing Lease Areas #2,Other Carrier's Existing Lease Areas #2_4,AAV equipment: Cienas/AAV/telco cabs
+OC2LA5,Other Carrier's Existing Lease Areas #2,Other Carrier's Existing Lease Areas #2_5,Junction box(es)
+OC2LA6,Other Carrier's Existing Lease Areas #2,Other Carrier's Existing Lease Areas #2_6,Ice Bridge/cable tray/ladder (Overall photos showing their locations)
+OC2LA7,Other Carrier's Existing Lease Areas #2,Other Carrier's Existing Lease Areas #2_7,"Ice Bridge posts (Showing where they’re located within compound, if applicable & especially if close to lease area)"
+OC2LA8,Other Carrier's Existing Lease Areas #2,Other Carrier's Existing Lease Areas #2_8,Meter Bank with labeling and carrier/tenant name
+OC2LA9,Other Carrier's Existing Lease Areas #2,Other Carrier's Existing Lease Areas #2_9,Manual Disconnect(s)
+OC2LA10,Other Carrier's Existing Lease Areas #2,Other Carrier's Existing Lease Areas #2_10,Automatic Transfer Switch (ATS)/Manual Transfer Switch (MTS may be within integrated PPC)
+OC2LA11,Other Carrier's Existing Lease Areas #2,Other Carrier's Existing Lease Areas #2_11,PPC (Breaker Panel) exterior
+OC3LA1,Other Carrier's Existing Lease Areas #3,Other Carrier's Existing Lease Areas #3_1,Overall view of each carrier’s lease space (Provide multiple images to aid in perspective if possible)
+OC3LA2,Other Carrier's Existing Lease Areas #3,Other Carrier's Existing Lease Areas #3_2,"Four photos of equipment pad – one from each side (Make sure all cabinets are visible, no need to zoom on them)"
+OC3LA3,Other Carrier's Existing Lease Areas #3,Other Carrier's Existing Lease Areas #3_3,H-frame(s) (Overall photos for location reference) (If applicable)
+OC3LA4,Other Carrier's Existing Lease Areas #3,Other Carrier's Existing Lease Areas #3_4,AAV equipment: Cienas/AAV/telco cabs
+OC3LA5,Other Carrier's Existing Lease Areas #3,Other Carrier's Existing Lease Areas #3_5,Junction box(es)
+OC3LA6,Other Carrier's Existing Lease Areas #3,Other Carrier's Existing Lease Areas #3_6,Ice Bridge/cable tray/ladder (Overall photos showing their locations)
+OC3LA7,Other Carrier's Existing Lease Areas #3,Other Carrier's Existing Lease Areas #3_7,"Ice Bridge posts (Showing where they’re located within compound, if applicable & especially if close to lease area)"
+OC3LA8,Other Carrier's Existing Lease Areas #3,Other Carrier's Existing Lease Areas #3_8,Meter Bank with labeling and carrier/tenant name
+OC3LA9,Other Carrier's Existing Lease Areas #3,Other Carrier's Existing Lease Areas #3_9,Manual Disconnect(s)
+OC3LA10,Other Carrier's Existing Lease Areas #3,Other Carrier's Existing Lease Areas #3_10,Automatic Transfer Switch (ATS)/Manual Transfer Switch (MTS may be within integrated PPC)
+OC3LA11,Other Carrier's Existing Lease Areas #3,Other Carrier's Existing Lease Areas #3_11,PPC (Breaker Panel) exterior
+TD1,Tower Details,Tower Details,"ALL Antennas and ancillary equipment on Tower (Overall tower, zoomed in photos of each sector of subject carrier)"
+SS1,Self-Support,Self-Support 1,Subject Carrier Cable Ladder location on Tower
+SS2,Self-Support,Self-Support 2,Safety Climb location
+SS3,Self-Support,Self-Support 3,"Tower foundation(s) - Overall, close-up"
+SS4,Self-Support,Self-Support 4,Tower Foundation Diameter(s) or Size (Provide on sketch or as-built markup) :
+SS5,Self-Support,Self-Support 5,Tower Face width (Provide on sketch or as-built markup) :
+MP1,Monopole,Monopole 1,Take photos of open coax ports (Bottom of Tower)
+MP2,Monopole,Monopole 2,Space inside Monopole for multiple coax? Space inside Monopole for (1-2) hybrid cables?
+MP3,Monopole,Monopole 3,Safety Climb location
+MP4,Monopole,Monopole 4,"Tower foundation - Overall, close-up"
+MP5,Monopole,Monopole 5,Tower Foundation Diameter or Size (Provide on sketch or as-built markup) :
+MP6,Monopole,Monopole 6,Tower Diameter (Provide on sketch or as-built markup) :
+GD1,Guyed Tower,Guyed Tower 1,Subject Carrier Cable Location on Tower
+GD2,Guyed Tower,Guyed Tower 2,Safety Climb Location
+GD3,Guyed Tower,Guyed Tower 3,Tower Foundation Diameter or Size (Provide on sketch or as-built markup) :
+GD4,Guyed Tower,Guyed Tower 4,Tower Face width (Provide on sketch or as-built markup) :
+GD5,Guyed Tower,Guyed Tower 5,Zoom to guy anchor points on tower if near to Subject Carrier RAD Center/mounts
