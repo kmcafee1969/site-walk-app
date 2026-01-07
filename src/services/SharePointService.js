@@ -97,18 +97,23 @@ class SharePointService {
             })
         };
 
-        const response = await fetch('/api/proxy', options);
+        try {
+            const response = await fetch('/api/proxy', options);
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Proxy Request Failed: ${response.status} ${response.statusText} - ${errorText}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Proxy Request Failed: ${response.status} ${response.statusText} - ${errorText}`);
+            }
+
+            if (isBinary) {
+                return await response.arrayBuffer();
+            }
+
+            return await response.json();
+        } catch (e) {
+            console.error("Proxy fetch failed:", e);
+            throw new Error(`Proxy Connection Failed: ${e.message}`);
         }
-
-        if (isBinary) {
-            return await response.arrayBuffer();
-        }
-
-        return await response.json();
     }
 
     /**
@@ -298,17 +303,22 @@ class SharePointService {
             const uploadUrl = session.uploadUrl;
             console.log("Got upload URL, uploading Zip direct to Microsoft...");
 
-            const uploadResponse = await fetch(uploadUrl, {
-                method: 'PUT',
-                headers: {
-                    'Content-Range': `bytes 0-${zipBlob.size - 1}/${zipBlob.size}`,
-                    'Content-Length': zipBlob.size
-                },
-                body: zipBlob
-            });
+            try {
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Range': `bytes 0-${zipBlob.size - 1}/${zipBlob.size}`,
+                        'Content-Length': zipBlob.size
+                    },
+                    body: zipBlob
+                });
 
-            if (!uploadResponse.ok) {
-                throw new Error(`Direct Zip Upload Failed: ${uploadResponse.statusText}`);
+                if (!uploadResponse.ok) {
+                    throw new Error(`Direct Zip Upload Failed: ${uploadResponse.statusText}`);
+                }
+            } catch (err) {
+                console.error("Upload fetch failed:", err);
+                throw new Error(`Microsoft Upload Connection Failed: ${err.message}`);
             }
 
             console.log(`Zip uploaded successfully: ${fullPath}`);
