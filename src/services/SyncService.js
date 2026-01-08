@@ -197,45 +197,54 @@ export const SyncService = {
                     const blob = await SharePointService.downloadPhoto(phase, siteName, file.name);
 
                     // Parse filename to match requirement
-                    // Format: SiteName - PhotoName Sequential.Sub.jpg
-                    // Try to match specific requirements
+                    // Format: SiteName SiteId PhotoReqName Sequential.Sub.jpg
                     let matchedReq = null;
                     let photoReqName = '';
 
-                    // Simple fuzzy match: check if filename contains req name
-                    for (const req of photoReqs) {
-                        if (file.name.includes(req.name)) {
+                    // FIXED: Use regex with word boundary to prevent "Overall Compound 1" matching "Overall Compound 2"
+                    // Sort by name length descending to match longest first (more specific)
+                    const sortedReqs = [...photoReqs].sort((a, b) => b.name.length - a.name.length);
+
+                    for (const req of sortedReqs) {
+                        // Escape special regex characters and require the name to be followed by a space and digit
+                        const escapedName = req.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const reqPattern = new RegExp(`${escapedName} \\d`);
+                        if (reqPattern.test(file.name)) {
                             matchedReq = req;
                             photoReqName = req.name;
                             break;
                         }
                     }
 
-                    // Fallback or extraction
+                    // Fallback: exact name extraction
                     if (!matchedReq) {
-                        // Attempt to extract from standard format
-                        // "Phase 1 - SiteName - Requirement Name 1.1.jpg"
                         const nameParts = file.name.split(' - ');
                         if (nameParts.length >= 3) {
-                            // "Requirement Name 1.1.jpg"
                             const lastPart = nameParts[nameParts.length - 1];
-                            // Remove numbering and extension
                             photoReqName = lastPart.replace(/ \d+\.\d+\.(jpg|jpeg)$/i, '').trim();
                             matchedReq = photoReqs.find(r => r.name === photoReqName);
                         }
                     }
 
                     if (matchedReq) {
+                        // FIXED: Convert blob to base64 for persistence across browser sessions
+                        const base64DataUrl = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result);
+                            reader.onerror = reject;
+                            reader.readAsDataURL(blob);
+                        });
+
                         const photoData = {
                             id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
                             photoReqId: matchedReq.id,
                             photoReqName: matchedReq.name,
                             filename: file.name,
                             blob: blob,
-                            dataUrl: URL.createObjectURL(blob), // Create URL for display
+                            dataUrl: base64DataUrl, // Base64 persists across sessions
                             size: blob.size,
                             capturedAt: file.lastModifiedDateTime || new Date().toISOString(),
-                            status: 'synced' // It came from server, so it's synced
+                            status: 'synced'
                         };
 
                         await StorageService.savePhoto(siteId, photoData);

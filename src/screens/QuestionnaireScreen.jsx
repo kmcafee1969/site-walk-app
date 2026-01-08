@@ -236,51 +236,42 @@ function QuestionnaireScreen() {
         }
 
         setShowUploadModal(true);
-        setUploadProgress({ current: 0, total: 1, status: 'Generating Excel file...' });
+        setUploadProgress({ current: 0, total: 1, status: 'Updating Site Tracker...' });
 
         try {
-            const excelBlob = generateExcel();
-
-            setUploadProgress({ current: 0, total: 1, status: 'Uploading to SharePoint...' });
-
-            await SharePointService.uploadQuestionnaire(
-                site.phase,
-                site.name,
-                site.id,
-                excelBlob
-            );
-
-            const folderPath = `Documents > Telamon - Viaero Site Walks > ${sharepointConfig.sharepoint.normalizePhase(site.phase)} > ${site.name}`;
+            // Update the Site Tracker directly instead of creating a separate file
+            await SharePointService.updateSiteTrackerRow(site.id, formData);
 
             setUploadProgress({
                 current: 1,
                 total: 1,
-                status: `✅ Success! Questionnaire uploaded to SharePoint.\n\nLocation: ${folderPath}\n\nSending email notification...`
+                status: `✅ Success! Site Tracker updated directly.\n\nSite: ${site.name}\n\nSending email notification...`
             });
 
             // Send email notification
             try {
+                const folderPath = `Documents > Telamon - Viaero Site Walks > ${sharepointConfig.sharepoint.siteDetailsFile}`;
                 await EmailService.sendUploadNotification(site.name, 'questionnaire', 1, { folderPath });
                 setUploadProgress(prev => ({
                     ...prev,
-                    status: `✅ Success! Questionnaire uploaded to SharePoint.\n\nLocation: ${folderPath}\n\n📧 Email notification sent!`
+                    status: `✅ Success! Site Tracker updated directly.\n\nSite: ${site.name}\n\n📧 Email notification sent!`
                 }));
             } catch (emailErr) {
                 console.error('Email notification failed:', emailErr);
             }
 
-            // Save questionnaire locally
+            // Save questionnaire locally as synced
             await StorageService.saveQuestionnaire(site.id, {
                 data: formData,
                 uploadedAt: new Date().toISOString()
             }, 'synced');
 
         } catch (error) {
-            console.error('Upload error:', error);
+            console.error('Update error:', error);
             setUploadProgress({
                 current: 0,
                 total: 1,
-                status: `❌ Upload failed: ${error.message}`
+                status: `❌ Update failed: ${error.message}`
             });
         }
     };

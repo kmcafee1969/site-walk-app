@@ -193,6 +193,146 @@ class SharePointService {
     }
 
     /**
+     * Get the drive item ID for the Site Tracker Excel file
+     * Required for Graph Excel API operations
+     */
+    async getTrackerDriveItemId() {
+        const siteId = await this.getSiteId();
+        const drives = await this.proxyRequest(`/sites/${siteId}/drives`);
+        const libraryName = sharepointConfig.sharepoint.documentLibrary;
+        const targetDrive = drives.value.find(d => d.name === libraryName);
+
+        if (!targetDrive) throw new Error('Document library not found');
+
+        const folderPath = sharepointConfig.sharepoint.folderPath;
+        const filename = sharepointConfig.sharepoint.siteDetailsFile;
+        const filePath = `${folderPath}/${filename}`;
+
+        // Get the item by path to retrieve its ID
+        const item = await this.proxyRequest(
+            `/sites/${siteId}/drives/${targetDrive.id}/root:/${filePath}`
+        );
+
+        return { siteId, driveId: targetDrive.id, itemId: item.id };
+    }
+
+    /**
+     * Find the row number for a specific site in the tracker
+     * Uses Graph Excel API to read column A (SiteID)
+     */
+    async findSiteRowInTracker(targetSiteId) {
+        try {
+            const { siteId, driveId, itemId } = await this.getTrackerDriveItemId();
+
+            // Read column A (SiteID) to find the row
+            // Assume max 500 rows, read A1:A500
+            const endpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='A1:A500')`;
+            const response = await this.proxyRequest(endpoint, 'GET');
+
+            const values = response.values || [];
+
+            // Find the row (1-indexed in Excel)
+            for (let i = 0; i < values.length; i++) {
+                const cellValue = String(values[i][0] || '').trim();
+                if (cellValue === String(targetSiteId).trim()) {
+                    return i + 1; // Excel rows are 1-indexed
+                }
+            }
+
+            console.warn(`Site ${targetSiteId} not found in tracker`);
+            return null;
+        } catch (error) {
+            console.error('Error finding site row:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update a specific row in the Site Tracker with questionnaire data
+     * Uses Graph Excel API PATCH to update cells directly
+     */
+    async updateSiteTrackerRow(targetSiteId, formData) {
+        try {
+            console.log(`Updating tracker for site ${targetSiteId}...`);
+
+            const { siteId, driveId, itemId } = await this.getTrackerDriveItemId();
+            const rowNumber = await this.findSiteRowInTracker(targetSiteId);
+
+            if (!rowNumber) {
+                throw new Error(`Site ${targetSiteId} not found in Site Tracker`);
+            }
+
+            // Column mapping based on ExcelService.js headers (lines 177-190)
+            // A=SiteID, K=Tower Owner, P=Lease Area Type, Q=Power Company, R=Meter Number,
+            // S=Telco/Fiber Provider, T=Telco/Fiber POC,
+            // U-AE=Measurements 1-11, AF=Walked By, AG=Date Walked, AH=Checked In, AI=Checked Out,
+            // AJ=Lease Area Issues, AK=Gate/Shelter Code
+
+            // Build the row values array matching the column order
+            // We'll update columns K onwards (index 10+) to avoid overwriting site info
+            // For safety, we read the row first, then update only our fields
+
+            const rowAddress = `A${rowNumber}:AZ${rowNumber}`;
+            const currentRow = await this.proxyRequest(
+                `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='${rowAddress}')`,
+                'GET'
+            );
+
+            const rowValues = currentRow.values[0] || [];
+
+            // Ensure row has enough columns
+            while (rowValues.length < 52) rowValues.push('');
+
+            // Update specific columns (0-indexed)
+            // Column L (11) = Tower Owner
+            if (formData.towerOwner !== undefined) rowValues[11] = formData.towerOwner;
+            // Column P (15) = Lease Area Type  
+            if (formData.leaseAreaType !== undefined) rowValues[15] = formData.leaseAreaType;
+            // Column Q (16) = Power Company
+            if (formData.powerCompany !== undefined) rowValues[16] = formData.powerCompany;
+            // Column R (17) = Meter Number
+            if (formData.meterNumber !== undefined) rowValues[17] = formData.meterNumber;
+            // Column S (18) = Telco/Fiber Provider
+            if (formData.telcoFiberProvider !== undefined) rowValues[18] = formData.telcoFiberProvider;
+            // Column T (19) = Telco/Fiber POC
+            if (formData.telcoFiberPOC !== undefined) rowValues[19] = formData.telcoFiberPOC;
+
+            // Measurements (columns U-AE = 20-30)
+            for (let i = 1; i <= 11; i++) {
+                const key = `measurement${i}`;
+                if (formData[key] !== undefined) {
+                    rowValues[19 + i] = formData[key];
+                }
+            }
+
+            // Column AF (31) = Walked By
+            if (formData.walkedBy !== undefined) rowValues[31] = formData.walkedBy;
+            // Column AG (32) = Date Walked
+            if (formData.dateWalked !== undefined) rowValues[32] = formData.dateWalked;
+            // Column AH (33) = Checked In
+            if (formData.checkedIn !== undefined) rowValues[33] = formData.checkedIn;
+            // Column AI (34) = Checked Out
+            if (formData.checkedOut !== undefined) rowValues[34] = formData.checkedOut;
+            // Column AJ (35) = Lease Area Issues
+            if (formData.leaseAreaIssues !== undefined) rowValues[35] = formData.leaseAreaIssues;
+            // Column AK (36) = Gate/Shelter Code
+            if (formData.gateShelterCode !== undefined) rowValues[36] = formData.gateShelterCode;
+
+            // PATCH the row
+            const patchEndpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='${rowAddress}')`;
+            await this.proxyRequest(patchEndpoint, 'PATCH', {
+                values: [rowValues]
+            });
+
+            console.log(`✓ Updated tracker row ${rowNumber} for site ${targetSiteId}`);
+            return true;
+        } catch (error) {
+            console.error('Error updating site tracker row:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Load photo requirements
      */
     async loadPhotoRequirements() {
