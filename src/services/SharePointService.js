@@ -269,16 +269,21 @@ class SharePointService {
                 throw new Error(`Site ${targetSiteId} not found in Site Tracker`);
             }
 
-            // Column mapping based on ExcelService.js headers (lines 177-190)
-            // A=SiteID, K=Tower Owner, P=Lease Area Type, Q=Power Company, R=Meter Number,
-            // S=Telco/Fiber Provider, T=Telco/Fiber POC,
-            // U-AE=Measurements 1-11, AF=Walked By, AG=Date Walked, AH=Checked In, AI=Checked Out,
-            // AJ=Lease Area Issues, AK=Gate/Shelter Code
+            // Read header row to build dynamic column mapping
+            const headerEndpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='A1:AZ1')`;
+            const headerResponse = await this.proxyRequest(headerEndpoint, 'GET');
+            const headers = headerResponse.values[0] || [];
 
-            // Build the row values array matching the column order
-            // We'll update columns K onwards (index 10+) to avoid overwriting site info
-            // For safety, we read the row first, then update only our fields
+            // Build column index map (normalize header names)
+            const normalizeHeader = (h) => String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const columnMap = {};
+            headers.forEach((h, i) => {
+                columnMap[normalizeHeader(h)] = i;
+            });
 
+            console.log('📊 Column map built:', Object.keys(columnMap).slice(0, 20).join(', '));
+
+            // Read current row
             const rowAddress = `A${rowNumber}:AZ${rowNumber}`;
             const currentRow = await this.proxyRequest(
                 `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='${rowAddress}')`,
@@ -286,44 +291,37 @@ class SharePointService {
             );
 
             const rowValues = currentRow.values[0] || [];
-
-            // Ensure row has enough columns
             while (rowValues.length < 52) rowValues.push('');
 
-            // Update specific columns (0-indexed)
-            // Column L (11) = Tower Owner
-            if (formData.towerOwner !== undefined) rowValues[11] = formData.towerOwner;
-            // Column P (15) = Lease Area Type  
-            if (formData.leaseAreaType !== undefined) rowValues[15] = formData.leaseAreaType;
-            // Column Q (16) = Power Company
-            if (formData.powerCompany !== undefined) rowValues[16] = formData.powerCompany;
-            // Column R (17) = Meter Number
-            if (formData.meterNumber !== undefined) rowValues[17] = formData.meterNumber;
-            // Column S (18) = Telco/Fiber Provider
-            if (formData.telcoFiberProvider !== undefined) rowValues[18] = formData.telcoFiberProvider;
-            // Column T (19) = Telco/Fiber POC
-            if (formData.telcoFiberPOC !== undefined) rowValues[19] = formData.telcoFiberPOC;
-
-            // Measurements (columns U-AE = 20-30)
-            for (let i = 1; i <= 11; i++) {
-                const key = `measurement${i}`;
-                if (formData[key] !== undefined) {
-                    rowValues[19 + i] = formData[key];
+            // Helper to update column by name
+            const setColumn = (headerName, value) => {
+                const idx = columnMap[normalizeHeader(headerName)];
+                if (idx !== undefined && value !== undefined) {
+                    rowValues[idx] = value;
+                    console.log(`  Set ${headerName} (col ${idx}) = ${String(value).substring(0, 30)}`);
                 }
-            }
+            };
 
-            // Column AF (31) = Walked By
-            if (formData.walkedBy !== undefined) rowValues[31] = formData.walkedBy;
-            // Column AG (32) = Date Walked
-            if (formData.dateWalked !== undefined) rowValues[32] = formData.dateWalked;
-            // Column AH (33) = Checked In
-            if (formData.checkedIn !== undefined) rowValues[33] = formData.checkedIn;
-            // Column AI (34) = Checked Out
-            if (formData.checkedOut !== undefined) rowValues[34] = formData.checkedOut;
-            // Column AJ (35) = Lease Area Issues
-            if (formData.leaseAreaIssues !== undefined) rowValues[35] = formData.leaseAreaIssues;
-            // Column AK (36) = Gate/Shelter Code
-            if (formData.gateShelterCode !== undefined) rowValues[36] = formData.gateShelterCode;
+            // Update fields using header names
+            setColumn('Walked By', formData.walkedBy);
+            setColumn('Date Walked', formData.dateWalked);
+            setColumn('Checked In', formData.checkedIn);
+            setColumn('Checked Out', formData.checkedOut);
+            setColumn('Tower Owner', formData.towerOwner);
+            setColumn('Lease Area Type', formData.leaseAreaType);
+            setColumn('Power Company', formData.powerCompany);
+            setColumn('Meter Number', formData.meterNumber);
+            setColumn('Telco / Fiber Provider', formData.telcoFiberProvider);
+            setColumn('Telco / Fiber POC', formData.telcoFiberPOC);
+            setColumn('Lease Area Issues', formData.leaseAreaIssues);
+            setColumn('Gate/Shelter Code', formData.gateShelterCode);
+
+            // Measurements
+            for (let i = 1; i <= 9; i++) {
+                setColumn(`Measurement ${i} (inches)`, formData[`measurement${i}`]);
+            }
+            setColumn('Measurement 10 (feet)', formData.measurement10);
+            setColumn('Measurement 11 (feet)', formData.measurement11);
 
             // PATCH the row
             const patchEndpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='${rowAddress}')`;
