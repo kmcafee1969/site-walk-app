@@ -35,6 +35,11 @@ export const ExcelService = {
                     rowMap[normalizeKey(key)] = row[key];
                 });
 
+                // Log first row's available keys for debugging
+                if (index === 0) {
+                    console.log('📊 EXCEL COLUMNS (normalized):', Object.keys(rowMap).join(', '));
+                }
+
                 // Check for various ID fields
                 const siteId = rowMap.siteid || rowMap.id || rowMap.projectid || rowMap.projectno || rowMap.site;
 
