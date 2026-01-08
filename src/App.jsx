@@ -12,6 +12,9 @@ import AuthService from './services/AuthService';
 import SharePointService from './services/SharePointService';
 import { SyncService } from './services/SyncService';
 
+// Version for deployment debugging
+const APP_VERSION = 'v2.5.0-20250108-1630';
+
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
     constructor(props) {

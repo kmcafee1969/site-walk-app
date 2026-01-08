@@ -289,6 +289,18 @@ function HomeScreen({ sites, onRefresh }) {
                     </div>
                 )}
             </div>
+
+            {/* Version Footer */}
+            <div style={{
+                textAlign: 'center',
+                padding: '20px',
+                fontSize: '11px',
+                color: '#888',
+                borderTop: '1px solid #eee',
+                marginTop: '20px'
+            }}>
+                App Version: v2.5.0-20250108-1630
+            </div>
         </div>
     );
 }
