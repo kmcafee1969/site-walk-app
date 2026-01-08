@@ -17,6 +17,7 @@ function PhotoCaptureScreen() {
     const locationRef = useRef(null); // Use Ref for dependable callback access
     const videoRef = useRef(null);
     const streamRef = useRef(null);
+    const fileInputRef = useRef(null); // For gallery uploads
 
     const [gpsStatus, setGpsStatus] = useState('searching'); // searching, locked, partial, error
     const [gpsError, setGpsError] = useState(null);
@@ -452,6 +453,81 @@ function PhotoCaptureScreen() {
         });
     };
 
+    // Handle gallery file upload
+    const handleFileUpload = async (event) => {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+
+            // Read file as data URL
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const dataUrl = e.target.result;
+
+                // Create image to get dimensions
+                const img = new Image();
+                img.onload = async () => {
+                    // Convert to blob
+                    const response = await fetch(dataUrl);
+                    const blob = await response.blob();
+
+                    // Generate filename
+                    const photoReqName = photoReq.name || `Photo ${photoReq.id}`;
+                    const nextNum = getNextSequentialNumber(photosRef.current, photoReqName);
+                    const filename = generatePhotoName(
+                        site.name,
+                        site.id,
+                        photoReqName,
+                        nextNum.sequential,
+                        nextNum.sub
+                    );
+
+                    // Create photo data
+                    const uniqueId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+                    const photoData = {
+                        id: uniqueId,
+                        photoReqId: photoReq.id,
+                        photoReqName: photoReqName,
+                        filename: filename + '.jpg',
+                        blob: blob,
+                        dataUrl: dataUrl,
+                        size: blob.size,
+                        width: img.width,
+                        height: img.height,
+                        capturedAt: new Date().toISOString(),
+                        status: 'pending',
+                        source: 'gallery' // Mark as uploaded from gallery
+                    };
+
+                    // Update state and ref
+                    const newPhotos = [...photosRef.current, photoData];
+                    photosRef.current = newPhotos;
+                    setCapturedPhotos(newPhotos);
+
+                    // Save to IndexedDB
+                    try {
+                        await StorageService.savePhoto(site.id, photoData);
+                        console.log('Gallery photo saved:', photoData.filename);
+                    } catch (error) {
+                        console.error('Error saving gallery photo:', error);
+                        alert('Failed to save uploaded photo.');
+                        // Rollback
+                        photosRef.current = photosRef.current.filter(p => p.id !== photoData.id);
+                        setCapturedPhotos(photosRef.current);
+                    }
+                };
+                img.src = dataUrl;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Reset input to allow re-selecting same file
+        event.target.value = '';
+    };
+
     if (!site || !photoReq) {
         return <div className="spinner"></div>;
     }
@@ -487,9 +563,20 @@ function PhotoCaptureScreen() {
                 {/* Camera */}
                 {!showCamera ? (
                     <div className="card mb-3 text-center">
-                        <button onClick={startCamera} className="btn btn-primary" style={{ width: '100%' }}>
+                        <button onClick={startCamera} className="btn btn-primary" style={{ width: '100%', marginBottom: '10px' }}>
                             📷 Open Camera
                         </button>
+                        <button onClick={() => fileInputRef.current?.click()} className="btn btn-secondary" style={{ width: '100%' }}>
+                            📤 Upload From Gallery
+                        </button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            accept="image/*"
+                            multiple
+                            hidden
+                            onChange={handleFileUpload}
+                        />
                     </div>
                 ) : (
                     <div className="card mb-3">
