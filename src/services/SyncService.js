@@ -133,12 +133,39 @@ export const SyncService = {
             console.log('Local files:', Array.from(localFilenames));
             console.log('Local photos with status:', localPhotos.map(p => ({ filename: p.filename, status: p.status, capturedAt: p.capturedAt })));
 
+            // 2.5 DEDUPLICATION: Remove duplicate local photos with same filename (keep newest)
+            const seenFilenames = new Map(); // filename -> photo with newest capturedAt
+            for (const photo of localPhotos) {
+                const existing = seenFilenames.get(photo.filename);
+                if (!existing) {
+                    seenFilenames.set(photo.filename, photo);
+                } else {
+                    // Keep the one with later capturedAt
+                    const existingDate = new Date(existing.capturedAt || 0);
+                    const currentDate = new Date(photo.capturedAt || 0);
+                    if (currentDate > existingDate) {
+                        // Delete the older one
+                        await StorageService.deletePhoto(existing.id);
+                        console.log(`🧹 Removed duplicate (older): ${existing.filename}`);
+                        seenFilenames.set(photo.filename, photo);
+                    } else {
+                        // Delete the current one (it's older or same)
+                        await StorageService.deletePhoto(photo.id);
+                        console.log(`🧹 Removed duplicate (older): ${photo.filename}`);
+                    }
+                }
+            }
+
+            // Refresh local data after deduplication
+            const cleanedPhotos = await StorageService.getPhotos(siteId);
+            const cleanedFilenames = new Set(cleanedPhotos.map(p => p.filename));
+
             // 3. Find photos to delete (Local exists, Server missing)
             // Delete photos if:
             // - They don't exist on the server, AND
             // - Either: status is not 'pending', OR status is 'pending' but photo is old (>5 min)
             const now = new Date();
-            const photosToDelete = localPhotos.filter(p => {
+            const photosToDelete = cleanedPhotos.filter(p => {
                 const notOnServer = !serverFilenames.has(p.filename);
 
                 if (!notOnServer) {
