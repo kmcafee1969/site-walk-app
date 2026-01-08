@@ -224,6 +224,12 @@ class SharePointService {
         try {
             const { siteId, driveId, itemId } = await this.getTrackerDriveItemId();
 
+            // First, read header row to log column names
+            const headerEndpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='A1:AZ1')`;
+            const headerResponse = await this.proxyRequest(headerEndpoint, 'GET');
+            const headers = headerResponse.values[0] || [];
+            console.log('📊 EXCEL COLUMN HEADERS:', headers.map((h, i) => `${i}:${h}`).join(' | '));
+
             // Read column A (SiteID) to find the row
             // Assume max 500 rows, read A1:A500
             const endpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='A1:A500')`;
@@ -235,6 +241,7 @@ class SharePointService {
             for (let i = 0; i < values.length; i++) {
                 const cellValue = String(values[i][0] || '').trim();
                 if (cellValue === String(targetSiteId).trim()) {
+                    console.log(`Found site ${targetSiteId} at row ${i + 1}`);
                     return i + 1; // Excel rows are 1-indexed
                 }
             }
