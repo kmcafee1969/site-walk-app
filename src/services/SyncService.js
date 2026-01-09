@@ -198,9 +198,29 @@ export const SyncService = {
                 }
             });
 
-            // 4. Find photos to download (Server exists, Local missing)
+            // 4. Find photos to download (Server exists, Local missing OR has broken URL)
+            // Also re-download photos that have blob:// URLs (old format that doesn't persist)
+            const photosWithBrokenUrls = cleanedPhotos.filter(p => {
+                const hasBrokenUrl = !p.dataUrl || p.dataUrl.startsWith('blob:');
+                if (hasBrokenUrl && serverFilenames.has(p.filename)) {
+                    console.log(`🔧 Photo has broken URL, will re-download: ${p.filename}`);
+                    return true;
+                }
+                return false;
+            });
+
+            // Delete photos with broken URLs so they can be re-downloaded
+            for (const photo of photosWithBrokenUrls) {
+                await StorageService.deletePhoto(photo.id);
+                console.log(`🗑️ Deleted photo with broken URL: ${photo.filename}`);
+            }
+
+            // Refresh local filenames after deleting broken ones
+            const remainingPhotos = await StorageService.getPhotos(siteId);
+            const remainingFilenames = new Set(remainingPhotos.map(p => p.filename));
+
             const photosToDownload = serverFiles.filter(f => {
-                const shouldDownload = !localFilenames.has(f.name) && f.name.toLowerCase().endsWith('.jpg');
+                const shouldDownload = !remainingFilenames.has(f.name) && f.name.toLowerCase().endsWith('.jpg');
                 if (shouldDownload) {
                     console.log(`📥 Will download: ${f.name}`);
                 }
