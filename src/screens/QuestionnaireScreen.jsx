@@ -97,6 +97,7 @@ function QuestionnaireScreen() {
                     // Parse Viaero POC if present (format: "Name, Phone, Email")
                     if (foundSite.viaeropoc) {
                         const pocParts = foundSite.viaeropoc.split(',').map(s => s.trim());
+                        console.log('📞 PARSING VIAERO POC:', foundSite.viaeropoc, '→', pocParts);
                         if (pocParts[0]) initialData.pocName = pocParts[0];
                         if (pocParts[1]) initialData.pocPhone = pocParts[1];
                         if (pocParts[2]) initialData.pocEmail = pocParts[2];
@@ -104,6 +105,7 @@ function QuestionnaireScreen() {
 
                     // Debug logging
                     console.log('📋 SITE DATA FOR PRE-POPULATION:', foundSite);
+                    console.log('📝 INITIAL DATA WITH POC:', { pocName: initialData.pocName, pocPhone: initialData.pocPhone, pocEmail: initialData.pocEmail });
 
                     // 2. Load Saved Questionnaire (Local)
                     const savedQuestionnaire = await StorageService.getQuestionnaire(siteId);
