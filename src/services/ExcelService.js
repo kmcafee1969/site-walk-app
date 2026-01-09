@@ -13,6 +13,16 @@ const toString = (val) => {
         if (val instanceof Date) return val.toISOString().split('T')[0];
         return JSON.stringify(val);
     }
+    // Check if it's an Excel date serial number (typically in range 1-100000)
+    // Excel dates: 1 = Jan 1, 1900, 45000+ = 2023+
+    if (typeof val === 'number' && val > 40000 && val < 60000) {
+        // Convert Excel serial to JavaScript Date
+        // Excel epoch is Dec 30, 1899
+        const excelEpoch = new Date(1899, 11, 30);
+        const date = new Date(excelEpoch.getTime() + val * 24 * 60 * 60 * 1000);
+        console.log('📅 Converting Excel date:', val, '→', date.toISOString().split('T')[0]);
+        return date.toISOString().split('T')[0];
+    }
     return String(val).trim();
 };
 
