@@ -213,7 +213,15 @@ class SharePointService {
             `/sites/${siteId}/drives/${targetDrive.id}/root:/${filePath}`
         );
 
-        return { siteId, driveId: targetDrive.id, itemId: item.id };
+        // Get the list of worksheets and use the first one
+        const worksheets = await this.proxyRequest(
+            `/sites/${siteId}/drives/${targetDrive.id}/items/${item.id}/workbook/worksheets`
+        );
+
+        const worksheetName = worksheets.value && worksheets.value[0] ? worksheets.value[0].name : 'Sheet1';
+        console.log('📑 Using worksheet:', worksheetName);
+
+        return { siteId, driveId: targetDrive.id, itemId: item.id, worksheetName };
     }
 
     /**
@@ -222,17 +230,17 @@ class SharePointService {
      */
     async findSiteRowInTracker(targetSiteId) {
         try {
-            const { siteId, driveId, itemId } = await this.getTrackerDriveItemId();
+            const { siteId, driveId, itemId, worksheetName } = await this.getTrackerDriveItemId();
 
             // First, read header row to log column names
-            const headerEndpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='A1:AZ1')`;
+            const headerEndpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('${worksheetName}')/range(address='A1:AZ1')`;
             const headerResponse = await this.proxyRequest(headerEndpoint, 'GET');
             const headers = headerResponse.values[0] || [];
             console.log('📊 EXCEL COLUMN HEADERS:', headers.map((h, i) => `${i}:${h}`).join(' | '));
 
             // Read column A (SiteID) to find the row
             // Assume max 500 rows, read A1:A500
-            const endpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='A1:A500')`;
+            const endpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('${worksheetName}')/range(address='A1:A500')`;
             const response = await this.proxyRequest(endpoint, 'GET');
 
             const values = response.values || [];
@@ -262,7 +270,7 @@ class SharePointService {
         try {
             console.log(`Updating tracker for site ${targetSiteId}...`);
 
-            const { siteId, driveId, itemId } = await this.getTrackerDriveItemId();
+            const { siteId, driveId, itemId, worksheetName } = await this.getTrackerDriveItemId();
             const rowNumber = await this.findSiteRowInTracker(targetSiteId);
 
             if (!rowNumber) {
@@ -270,7 +278,7 @@ class SharePointService {
             }
 
             // Read header row to build dynamic column mapping
-            const headerEndpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='A1:AZ1')`;
+            const headerEndpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('${worksheetName}')/range(address='A1:AZ1')`;
             const headerResponse = await this.proxyRequest(headerEndpoint, 'GET');
             const headers = headerResponse.values[0] || [];
 
@@ -286,7 +294,7 @@ class SharePointService {
             // Read current row
             const rowAddress = `A${rowNumber}:AZ${rowNumber}`;
             const currentRow = await this.proxyRequest(
-                `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='${rowAddress}')`,
+                `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('${worksheetName}')/range(address='${rowAddress}')`,
                 'GET'
             );
 
@@ -324,7 +332,7 @@ class SharePointService {
             setColumn('Measurement 11 (feet)', formData.measurement11);
 
             // PATCH the row
-            const patchEndpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('Sheet1')/range(address='${rowAddress}')`;
+            const patchEndpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('${worksheetName}')/range(address='${rowAddress}')`;
             await this.proxyRequest(patchEndpoint, 'PATCH', {
                 values: [rowValues]
             });
