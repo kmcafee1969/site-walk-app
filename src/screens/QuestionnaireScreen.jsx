@@ -86,6 +86,16 @@ function QuestionnaireScreen() {
                         gateShelterCode: foundSite.gateCode || ''
                     };
 
+                    // Debug logging
+                    console.log('📋 SITE DATA FOR PRE-POPULATION:', {
+                        towerOwner: foundSite.towerOwner,
+                        telcoProvider: foundSite.telcoProvider,
+                        leaseAreaType: foundSite.leaseAreaType,
+                        gateCode: foundSite.gateCode,
+                        powerCompany: foundSite.powerCompany,
+                        meterNumber: foundSite.meterNumber
+                    });
+
                     // 2. Load Saved Questionnaire (Local)
                     const savedQuestionnaire = await StorageService.getQuestionnaire(siteId);
                     if (savedQuestionnaire && savedQuestionnaire.data) {
