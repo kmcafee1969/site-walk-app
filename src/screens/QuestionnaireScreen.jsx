@@ -79,22 +79,31 @@ function QuestionnaireScreen() {
                     // Default values from site info
                     let initialData = {
                         towerOwner: foundSite.towerOwner || '',
+                        faNumber: foundSite.towerOwnerSiteNumber || '',
                         powerCompany: foundSite.powerCompany || '',
                         meterNumber: foundSite.meterNumber || '',
                         telcoFiberProvider: foundSite.telcoProvider || '',
+                        telcoFiberPOC: foundSite.telcoProviderPOC || '',
                         leaseAreaType: foundSite.leaseAreaType || '',
-                        gateShelterCode: foundSite.gateCode || ''
+                        gateShelterCode: foundSite.gateCode || '',
+                        towerType: foundSite.siteType || '',
+                        walkedBy: foundSite.walkedBy || '',
+                        dateWalked: foundSite.dateWalked || new Date().toISOString().split('T')[0],
+                        checkedIn: foundSite.checkedIn || '',
+                        checkedOut: foundSite.checkedOut || '',
+                        leaseAreaIssues: foundSite.leaseAreaIssues || ''
                     };
 
+                    // Parse Viaero POC if present (format: "Name, Phone, Email")
+                    if (foundSite.viaeropoc) {
+                        const pocParts = foundSite.viaeropoc.split(',').map(s => s.trim());
+                        if (pocParts[0]) initialData.pocName = pocParts[0];
+                        if (pocParts[1]) initialData.pocPhone = pocParts[1];
+                        if (pocParts[2]) initialData.pocEmail = pocParts[2];
+                    }
+
                     // Debug logging
-                    console.log('📋 SITE DATA FOR PRE-POPULATION:', {
-                        towerOwner: foundSite.towerOwner,
-                        telcoProvider: foundSite.telcoProvider,
-                        leaseAreaType: foundSite.leaseAreaType,
-                        gateCode: foundSite.gateCode,
-                        powerCompany: foundSite.powerCompany,
-                        meterNumber: foundSite.meterNumber
-                    });
+                    console.log('📋 SITE DATA FOR PRE-POPULATION:', foundSite);
 
                     // 2. Load Saved Questionnaire (Local)
                     const savedQuestionnaire = await StorageService.getQuestionnaire(siteId);

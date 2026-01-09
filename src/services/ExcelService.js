@@ -55,15 +55,22 @@ export const ExcelService = {
                         longitude: toString(rowMap.longitude || rowMap.long || rowMap.lon),
                         phase: toString(rowMap.group || rowMap.phase || rowMap.projectphase),
                         towerOwner: toString(rowMap.towerowner || rowMap.owner),
+                        towerOwnerSiteNumber: toString(rowMap.towerownersitenumber),
+                        viaeropoc: toString(rowMap.viaeropoc),
+                        siteType: toString(rowMap.sitetype || rowMap.towertype),
                         powerCompany: toString(rowMap.powercompany || rowMap.utilityprovider),
                         meterNumber: toString(rowMap.meternumber || rowMap.meterid),
                         telcoProvider: toString(rowMap.telcofiberprovider || rowMap.telco || rowMap.fiberprovider),
+                        telcoProviderPOC: toString(rowMap.telcofiberpoc),
                         leaseAreaType: toString(rowMap.leaseareatype || rowMap.leasetype),
                         gateCode: toString(rowMap.gatecode || rowMap.gatesheltercode || rowMap.accesscode),
                         photosUploaded: toString(rowMap.photosuploaded),
                         formUploaded: toString(rowMap.sitewalkformuploaded || rowMap.formuploaded),
                         dateWalked: toString(rowMap.datewalked),
-                        walkedBy: toString(rowMap.walkedby)
+                        walkedBy: toString(rowMap.walkedby),
+                        checkedIn: toString(rowMap.checkedin),
+                        checkedOut: toString(rowMap.checkedout),
+                        leaseAreaIssues: toString(rowMap.leaseareaissues)
                     });
                 }
             });
