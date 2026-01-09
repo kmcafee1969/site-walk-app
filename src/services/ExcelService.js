@@ -14,19 +14,34 @@ const toString = (val) => {
         return JSON.stringify(val);
     }
 
-    // Convert to number if it's a string that looks like a number
-    const numVal = typeof val === 'string' ? parseFloat(val) : val;
-
-    // Check if it's an Excel date serial number (typically in range 1-100000)
-    // Excel dates: 1 = Jan 1, 1900, 45000+ = 2023+
-    if (typeof numVal === 'number' && !isNaN(numVal) && numVal > 40000 && numVal < 60000) {
+    // Only convert pure numbers, not strings that look like addresses with numbers
+    // (e.g., "42366 Road 724" should not be converted)
+    if (typeof val === 'number' && val > 40000 && val < 60000) {
         // Convert Excel serial to JavaScript Date
-        // Excel epoch is Dec 30, 1899
         const excelEpoch = new Date(1899, 11, 30);
-        const date = new Date(excelEpoch.getTime() + numVal * 24 * 60 * 60 * 1000);
+        const date = new Date(excelEpoch.getTime() + val * 24 * 60 * 60 * 1000);
         console.log('📅 Converting Excel date:', val, '→', date.toISOString().split('T')[0]);
         return date.toISOString().split('T')[0];
     }
+    return String(val).trim();
+};
+
+// Helper to convert Excel time serial (0-1) to HH:MM format
+const toTime = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+
+    const numVal = typeof val === 'string' ? parseFloat(val) : val;
+
+    // Excel time is fraction of day (0 = midnight, 0.5 = noon, 1 = midnight next day)
+    if (typeof numVal === 'number' && !isNaN(numVal) && numVal >= 0 && numVal < 1) {
+        const totalMinutes = Math.round(numVal * 24 * 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        const formatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        console.log('⏰ Converting Excel time:', val, '→', formatted);
+        return formatted;
+    }
+
     return String(val).trim();
 };
 
@@ -82,8 +97,8 @@ export const ExcelService = {
                         formUploaded: toString(rowMap.sitewalkformuploaded || rowMap.formuploaded),
                         dateWalked: toString(rowMap.datewalked),
                         walkedBy: toString(rowMap.walkedby),
-                        checkedIn: toString(rowMap.checkedin),
-                        checkedOut: toString(rowMap.checkedout),
+                        checkedIn: toTime(rowMap.checkedin),
+                        checkedOut: toTime(rowMap.checkedout),
                         leaseAreaIssues: toString(rowMap.leaseareaissues),
                         // Measurements
                         measurement1: toString(rowMap.measurement1inches),
