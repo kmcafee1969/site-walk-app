@@ -134,10 +134,12 @@ function QuestionnaireScreen() {
                     });
                     setNaChecked(newNaChecked);
 
-                    setFormData(prev => ({
-                        ...prev,
-                        ...initialData
-                    }));
+                    console.log('📝 FINAL initialData being set to formData:', initialData);
+                    setFormData(prev => {
+                        const newData = { ...prev, ...initialData };
+                        console.log('📝 NEW formData after merge:', newData);
+                        return newData;
+                    });
                 }
             } catch (error) {
                 console.error('Error loading data:', error);
