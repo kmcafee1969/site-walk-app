@@ -84,7 +84,19 @@ export const ExcelService = {
                         walkedBy: toString(rowMap.walkedby),
                         checkedIn: toString(rowMap.checkedin),
                         checkedOut: toString(rowMap.checkedout),
-                        leaseAreaIssues: toString(rowMap.leaseareaissues)
+                        leaseAreaIssues: toString(rowMap.leaseareaissues),
+                        // Measurements
+                        measurement1: toString(rowMap.measurement1inches),
+                        measurement2: toString(rowMap.measurement2inches),
+                        measurement3: toString(rowMap.measurement3inches),
+                        measurement4: toString(rowMap.measurement4inches),
+                        measurement5: toString(rowMap.measurement5inches),
+                        measurement6: toString(rowMap.measurement6inches),
+                        measurement7: toString(rowMap.measurement7inches),
+                        measurement8: toString(rowMap.measurement8inches),
+                        measurement9: toString(rowMap.measurement9inches),
+                        measurement10: toString(rowMap.measurement10feet),
+                        measurement11: toString(rowMap.measurement11feet)
                     });
                 }
             });

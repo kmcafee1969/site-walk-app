@@ -91,7 +91,19 @@ function QuestionnaireScreen() {
                         dateWalked: foundSite.dateWalked || new Date().toISOString().split('T')[0],
                         checkedIn: foundSite.checkedIn || '',
                         checkedOut: foundSite.checkedOut || '',
-                        leaseAreaIssues: foundSite.leaseAreaIssues || ''
+                        leaseAreaIssues: foundSite.leaseAreaIssues || '',
+                        // Measurements
+                        measurement1: foundSite.measurement1 || '',
+                        measurement2: foundSite.measurement2 || '',
+                        measurement3: foundSite.measurement3 || '',
+                        measurement4: foundSite.measurement4 || '',
+                        measurement5: foundSite.measurement5 || '',
+                        measurement6: foundSite.measurement6 || '',
+                        measurement7: foundSite.measurement7 || '',
+                        measurement8: foundSite.measurement8 || '',
+                        measurement9: foundSite.measurement9 || '',
+                        measurement10: foundSite.measurement10 || '',
+                        measurement11: foundSite.measurement11 || ''
                     };
 
                     // Parse Viaero POC if present (format: "Name, Phone, Email")
