@@ -316,6 +316,7 @@ class SharePointService {
             setColumn('Checked In', formData.checkedIn);
             setColumn('Checked Out', formData.checkedOut);
             setColumn('Tower Owner', formData.towerOwner);
+            setColumn('Tower Owner Site Number', formData.faNumber);
             setColumn('Lease Area Type', formData.leaseAreaType);
             setColumn('Power Company', formData.powerCompany);
             setColumn('Meter Number', formData.meterNumber);
