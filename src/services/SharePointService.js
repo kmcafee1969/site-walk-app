@@ -454,27 +454,74 @@ class SharePointService {
             });
 
             const uploadUrl = session.uploadUrl;
-            console.log("Got upload URL, uploading Zip direct to Microsoft...");
+            console.log("Got upload URL, uploading Zip to Microsoft...");
 
-            try {
-                const uploadResponse = await fetch(uploadUrl, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Range': `bytes 0-${zipBlob.size - 1}/${zipBlob.size}`,
-                        'Content-Length': zipBlob.size
-                    },
-                    body: zipBlob
-                });
+            // For large files, upload in chunks (10MB each)
+            const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+            const fileSize = zipBlob.size;
 
-                if (!uploadResponse.ok) {
-                    throw new Error(`Direct Zip Upload Failed: ${uploadResponse.statusText}`);
+            if (fileSize <= CHUNK_SIZE) {
+                // Small file - single upload
+                console.log(`Small file (${(fileSize / 1024 / 1024).toFixed(2)} MB), uploading in one request...`);
+                try {
+                    const uploadResponse = await fetch(uploadUrl, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Range': `bytes 0-${fileSize - 1}/${fileSize}`,
+                            'Content-Length': fileSize.toString()
+                        },
+                        body: zipBlob
+                    });
+
+                    if (!uploadResponse.ok) {
+                        throw new Error(`Direct Zip Upload Failed: ${uploadResponse.statusText}`);
+                    }
+                } catch (err) {
+                    console.error("Upload fetch failed:", err);
+                    throw new Error(`Microsoft Upload Connection Failed: ${err.message}`);
                 }
-            } catch (err) {
-                console.error("Upload fetch failed:", err);
-                throw new Error(`Microsoft Upload Connection Failed: ${err.message}`);
+            } else {
+                // Large file - chunked upload
+                console.log(`Large file (${(fileSize / 1024 / 1024).toFixed(2)} MB), uploading in ${CHUNK_SIZE / 1024 / 1024}MB chunks...`);
+
+                let start = 0;
+                let chunkNumber = 1;
+                const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
+
+                while (start < fileSize) {
+                    const end = Math.min(start + CHUNK_SIZE, fileSize);
+                    const chunk = zipBlob.slice(start, end);
+
+                    console.log(`Uploading chunk ${chunkNumber}/${totalChunks}: bytes ${start}-${end - 1}/${fileSize}`);
+
+                    try {
+                        const uploadResponse = await fetch(uploadUrl, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Range': `bytes ${start}-${end - 1}/${fileSize}`,
+                                'Content-Length': (end - start).toString()
+                            },
+                            body: chunk
+                        });
+
+                        if (!uploadResponse.ok && uploadResponse.status !== 202) {
+                            const errorText = await uploadResponse.text();
+                            throw new Error(`Chunk upload failed: ${uploadResponse.status} - ${errorText}`);
+                        }
+
+                        const progress = Math.round((end / fileSize) * 100);
+                        console.log(`✓ Chunk ${chunkNumber} uploaded (${progress}% complete)`);
+                    } catch (err) {
+                        console.error(`Chunk ${chunkNumber} upload failed:`, err);
+                        throw new Error(`Microsoft Upload Connection Failed at chunk ${chunkNumber}: ${err.message}`);
+                    }
+
+                    start = end;
+                    chunkNumber++;
+                }
             }
 
-            console.log(`Zip uploaded successfully: ${fullPath}`);
+            console.log(`✅ Zip uploaded successfully: ${fullPath}`);
             return true;
         } catch (error) {
             console.error('Error uploading zip:', error);
