@@ -124,6 +124,27 @@ function QuestionnaireScreen() {
                     if (savedQuestionnaire && savedQuestionnaire.data) {
                         console.log("Loaded saved questionnaire:", savedQuestionnaire.data);
                         initialData = { ...initialData, ...savedQuestionnaire.data };
+
+                        // Re-apply tracker values that should always take priority over local cache
+                        // These fields are the source of truth from the SharePoint tracker
+                        if (foundSite.towerOwnerSiteNumber) initialData.faNumber = foundSite.towerOwnerSiteNumber;
+                        if (foundSite.towerOwner) initialData.towerOwner = foundSite.towerOwner;
+                        if (foundSite.powerCompany) initialData.powerCompany = foundSite.powerCompany;
+                        if (foundSite.meterNumber) initialData.meterNumber = foundSite.meterNumber;
+                        if (foundSite.telcoProvider) initialData.telcoFiberProvider = foundSite.telcoProvider;
+                        if (foundSite.telcoProviderPOC) initialData.telcoFiberPOC = foundSite.telcoProviderPOC;
+                        if (foundSite.leaseAreaType) initialData.leaseAreaType = foundSite.leaseAreaType;
+                        if (foundSite.gateCode) initialData.gateShelterCode = foundSite.gateCode;
+                        if (foundSite.dateWalked) initialData.dateWalked = foundSite.dateWalked;
+                        if (foundSite.walkedBy) initialData.walkedBy = foundSite.walkedBy;
+                        if (foundSite.checkedIn) initialData.checkedIn = foundSite.checkedIn;
+                        if (foundSite.checkedOut) initialData.checkedOut = foundSite.checkedOut;
+                        if (foundSite.leaseAreaIssues) initialData.leaseAreaIssues = foundSite.leaseAreaIssues;
+                        // Measurements
+                        for (let i = 1; i <= 11; i++) {
+                            if (foundSite[`measurement${i}`]) initialData[`measurement${i}`] = foundSite[`measurement${i}`];
+                        }
+                        console.log('📋 Re-applied tracker values over local cache');
                     }
 
                     // 3. Load Remote Questionnaire (if requested)
