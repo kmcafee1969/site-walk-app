@@ -453,76 +453,127 @@ function PhotoCaptureScreen() {
         });
     };
 
-    // Handle gallery file upload
+    // Compress image using canvas (reduces file size significantly)
+    const compressImage = (file, maxWidth = 1920, quality = 0.8) => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+
+            img.onload = () => {
+                URL.revokeObjectURL(url); // Free memory immediately
+
+                // Calculate new dimensions
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth) {
+                    height = (height * maxWidth) / width;
+                    width = maxWidth;
+                }
+
+                // Create canvas for compression
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Convert to blob with compression
+                canvas.toBlob(
+                    (blob) => {
+                        if (blob) {
+                            // Create data URL from compressed blob
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                resolve({
+                                    blob,
+                                    dataUrl: reader.result,
+                                    width,
+                                    height
+                                });
+                            };
+                            reader.onerror = reject;
+                            reader.readAsDataURL(blob);
+                        } else {
+                            reject(new Error('Failed to compress image'));
+                        }
+                    },
+                    'image/jpeg',
+                    quality
+                );
+            };
+
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                reject(new Error('Failed to load image'));
+            };
+
+            img.src = url;
+        });
+    };
+
+    // Handle gallery file upload - process sequentially to prevent memory issues
     const handleFileUpload = async (event) => {
         const files = event.target.files;
         if (!files || files.length === 0) return;
 
+        console.log(`📤 Processing ${files.length} file(s) from gallery...`);
+
+        // Process files sequentially to avoid memory exhaustion
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
+            console.log(`Processing file ${i + 1}/${files.length}: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
 
-            // Read file as data URL
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const dataUrl = e.target.result;
+            try {
+                // Compress image to reduce memory usage
+                const compressed = await compressImage(file);
+                console.log(`Compressed: ${(compressed.blob.size / 1024 / 1024).toFixed(2)} MB`);
 
-                // Create image to get dimensions
-                const img = new Image();
-                img.onload = async () => {
-                    // Convert to blob
-                    const response = await fetch(dataUrl);
-                    const blob = await response.blob();
+                // Generate filename
+                const photoReqName = photoReq.name || `Photo ${photoReq.id}`;
+                const nextNum = getNextSequentialNumber(photosRef.current, photoReqName);
+                const filename = generatePhotoName(
+                    site.name,
+                    site.id,
+                    photoReqName,
+                    nextNum.sequential,
+                    nextNum.sub
+                );
 
-                    // Generate filename
-                    const photoReqName = photoReq.name || `Photo ${photoReq.id}`;
-                    const nextNum = getNextSequentialNumber(photosRef.current, photoReqName);
-                    const filename = generatePhotoName(
-                        site.name,
-                        site.id,
-                        photoReqName,
-                        nextNum.sequential,
-                        nextNum.sub
-                    );
+                // Create photo data
+                const uniqueId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-                    // Create photo data
-                    const uniqueId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-                    const photoData = {
-                        id: uniqueId,
-                        photoReqId: photoReq.id,
-                        photoReqName: photoReqName,
-                        filename: filename + '.jpg',
-                        blob: blob,
-                        dataUrl: dataUrl,
-                        size: blob.size,
-                        width: img.width,
-                        height: img.height,
-                        capturedAt: new Date().toISOString(),
-                        status: 'pending',
-                        source: 'gallery' // Mark as uploaded from gallery
-                    };
-
-                    // Update state and ref
-                    const newPhotos = [...photosRef.current, photoData];
-                    photosRef.current = newPhotos;
-                    setCapturedPhotos(newPhotos);
-
-                    // Save to IndexedDB
-                    try {
-                        await StorageService.savePhoto(site.id, photoData);
-                        console.log('Gallery photo saved:', photoData.filename);
-                    } catch (error) {
-                        console.error('Error saving gallery photo:', error);
-                        alert('Failed to save uploaded photo.');
-                        // Rollback
-                        photosRef.current = photosRef.current.filter(p => p.id !== photoData.id);
-                        setCapturedPhotos(photosRef.current);
-                    }
+                const photoData = {
+                    id: uniqueId,
+                    photoReqId: photoReq.id,
+                    photoReqName: photoReqName,
+                    filename: filename + '.jpg',
+                    blob: compressed.blob,
+                    dataUrl: compressed.dataUrl,
+                    size: compressed.blob.size,
+                    width: compressed.width,
+                    height: compressed.height,
+                    capturedAt: new Date().toISOString(),
+                    status: 'pending',
+                    source: 'gallery'
                 };
-                img.src = dataUrl;
-            };
-            reader.readAsDataURL(file);
+
+                // Update state and ref
+                const newPhotos = [...photosRef.current, photoData];
+                photosRef.current = newPhotos;
+                setCapturedPhotos(newPhotos);
+
+                // Save to IndexedDB
+                await StorageService.savePhoto(site.id, photoData);
+                console.log('✓ Gallery photo saved:', photoData.filename);
+            } catch (error) {
+                console.error(`Error processing file ${file.name}:`, error);
+                alert(`Failed to process photo: ${file.name}`);
+            }
         }
+
+        console.log(`📤 Finished processing ${files.length} file(s)`);
 
         // Reset input to allow re-selecting same file
         event.target.value = '';
