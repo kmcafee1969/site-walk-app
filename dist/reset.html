@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Reset Tool</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            padding: 20px;
+            text-align: center;
+        }
+
+        button {
+            background: #d32f2f;
+            color: white;
+            padding: 15px 30px;
+            font-size: 18px;
+            border: none;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .success {
+            color: green;
+            display: none;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>⚠️ Force Update ⚠️</h1>
+    <p>Your phone is holding onto an old version of the app.</p>
+    <p>Click the button below to clear the "Service Worker" cache and reload.</p>
+
+    <button onclick="resetApp()">CLEAR CACHE & RELOAD</button>
+
+    <div id="status" class="success">Cache Cleared! Redirecting...</div>
+
+    <script>
+        async function resetApp() {
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (let registration of registrations) {
+                    await registration.unregister();
+                }
+            }
+            // Also try to clear caches
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                for (const name of cacheNames) {
+                    await caches.delete(name);
+                }
+            }
+
+            document.getElementById('status').style.display = 'block';
+            setTimeout(() => {
+                window.location.href = '/?timestamp=' + Date.now();
+            }, 1000);
+        }
+    </script>
+</body>
+
+</html>

@@ -42,8 +42,7 @@ export const sharepointConfig = {
             const cleanPhase = (phase || '').toUpperCase().replace('PHASE', '').trim();
 
             // Map known phases
-            // Pattern seems to be: "Telamon Site Walks - Phase X"
-            // We can construct this dynamically
+            // Pattern: "Telamon Site Walks - Phase X" (space-dash-space for consistency)
             if (cleanPhase) {
                 return `Telamon Site Walks - Phase ${cleanPhase}`;
             }

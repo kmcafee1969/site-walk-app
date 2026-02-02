@@ -679,6 +679,7 @@ class SharePointService {
 
     /**
      * List files in a site folder
+     * Returns items with: name, id, size, lastModifiedDateTime, folder (if folder), childCount
      */
     async listFiles(phase, siteName, subfolder = 'PHOTOS') {
         try {
@@ -691,7 +692,8 @@ class SharePointService {
             const libraryName = sharepointConfig.sharepoint.documentLibrary;
             const targetDrive = drives.value.find(d => d.name === libraryName);
 
-            const endpoint = `/sites/${siteId}/drives/${targetDrive.id}/root:/${photoPath}:/children?select=name,id,size,lastModifiedDateTime`;
+            // Include 'folder' property to distinguish folders from files
+            const endpoint = `/sites/${siteId}/drives/${targetDrive.id}/root:/${photoPath}:/children?select=name,id,size,lastModifiedDateTime,folder`;
 
             const response = await this.proxyRequest(endpoint);
             return response.value || [];
@@ -699,6 +701,110 @@ class SharePointService {
             console.error('Error listing files:', error);
             return [];
         }
+    }
+
+    /**
+     * Check if a specific file exists in SharePoint
+     */
+    async checkFileExists(phase, siteName, filename, subfolder = 'PHOTOS') {
+        try {
+            const files = await this.listFiles(phase, siteName, subfolder);
+            return files.some(f => f.name === filename);
+        } catch (error) {
+            console.error('Error checking file existence:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Get next available filename (appends _1, _2, etc. if file exists)
+     * @param {string} phase - Site phase
+     * @param {string} siteName - Site name
+     * @param {string} baseFilename - Base filename (e.g., "overall_compound.zip")
+     * @param {string} subfolder - Subfolder name
+     * @returns {Promise<string>} - Available filename
+     */
+    async getNextAvailableFilename(phase, siteName, baseFilename, subfolder = 'PHOTOS') {
+        try {
+            const files = await this.listFiles(phase, siteName, subfolder);
+            const existingNames = new Set(files.map(f => f.name.toLowerCase()));
+
+            // Check if base filename is available
+            if (!existingNames.has(baseFilename.toLowerCase())) {
+                return baseFilename;
+            }
+
+            // Parse base name and extension
+            const lastDotIndex = baseFilename.lastIndexOf('.');
+            const baseName = lastDotIndex > 0 ? baseFilename.substring(0, lastDotIndex) : baseFilename;
+            const extension = lastDotIndex > 0 ? baseFilename.substring(lastDotIndex) : '';
+
+            // Find next available number
+            let counter = 1;
+            while (counter < 100) { // Safety limit
+                const newFilename = `${baseName}_${counter}${extension}`;
+                if (!existingNames.has(newFilename.toLowerCase())) {
+                    return newFilename;
+                }
+                counter++;
+            }
+
+            // Fallback with timestamp
+            return `${baseName}_${Date.now()}${extension}`;
+        } catch (error) {
+            console.error('Error getting next available filename:', error);
+            // Fallback with timestamp
+            const lastDotIndex = baseFilename.lastIndexOf('.');
+            const baseName = lastDotIndex > 0 ? baseFilename.substring(0, lastDotIndex) : baseFilename;
+            const extension = lastDotIndex > 0 ? baseFilename.substring(lastDotIndex) : '';
+            return `${baseName}_${Date.now()}${extension}`;
+        }
+    }
+
+    /**
+     * Get direct SharePoint URL for the PHOTOS folder
+     * Used for "View in SharePoint" button to avoid loading photos into memory
+     */
+    getPhotoFolderUrl(phase, siteName) {
+        const siteUrl = sharepointConfig.sharepoint.siteUrl;
+        const rootFolder = sharepointConfig.sharepoint.folderPath;
+        const normalizedPhase = sharepointConfig.sharepoint.normalizePhase(phase);
+
+        // Build path matching SharePoint's exact format
+        // Example working URL id param: /sites/Trid3ntCOPs/Shared Documents/Telamon - Viaero Site Walks/Telamon Site Walks- Phase 11/CO-ATWOOD/PHOTOS
+        const fullPath = `/sites/Trid3ntCOPs/Shared Documents/${rootFolder}/${normalizedPhase}/${siteName}/PHOTOS`;
+
+        // Encode the entire path for the id parameter
+        const encodedId = encodeURIComponent(fullPath);
+
+        return `${siteUrl}/Shared%20Documents/Forms/AllItems.aspx?id=${encodedId}`;
+    }
+
+    /**
+     * Get direct SharePoint URL for a category subfolder in PHOTOS
+     * Used for "View in SharePoint" button to go directly to category folder
+     * @param {string} phase - Site phase
+     * @param {string} siteName - Site name
+     * @param {string} categoryName - Photo requirement name (will be sanitized)
+     */
+    getCategoryFolderUrl(phase, siteName, categoryName) {
+        const siteUrl = sharepointConfig.sharepoint.siteUrl;
+        const rootFolder = sharepointConfig.sharepoint.folderPath;
+        const normalizedPhase = sharepointConfig.sharepoint.normalizePhase(phase);
+
+        // Sanitize category name to match folder name created by Power Automate
+        const sanitizedCategory = categoryName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+
+        // Build full path including category subfolder
+        const fullPath = `/sites/Trid3ntCOPs/Shared Documents/${rootFolder}/${normalizedPhase}/${siteName}/PHOTOS/${sanitizedCategory}`;
+
+        // Encode the entire path for the id parameter
+        const encodedId = encodeURIComponent(fullPath);
+
+        return `${siteUrl}/Shared%20Documents/Forms/AllItems.aspx?id=${encodedId}`;
     }
 
     /**

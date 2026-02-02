@@ -3,6 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { StorageService } from '../services/StorageService';
 import { SyncService } from '../services/SyncService';
 import { generatePhotoName, getNextSequentialNumber } from '../utils/photoNaming';
+import { sharepointConfig } from '../config/sharepoint.config';
+import SharePointService from '../services/SharePointService';
 
 function PhotoCaptureScreen() {
     const { siteId, photoReqId } = useParams();
@@ -22,10 +24,18 @@ function PhotoCaptureScreen() {
     const [gpsStatus, setGpsStatus] = useState('searching'); // searching, locked, partial, error
     const [gpsError, setGpsError] = useState(null);
 
+    // Compass heading state
+    const [heading, setHeading] = useState(null);
+    const headingRef = useRef(null);
+
     // Zoom State
     const [zoom, setZoom] = useState(1);
     const [zoomRange, setZoomRange] = useState({ min: 1, max: 3, step: 0.1 });
     const [supportsZoom, setSupportsZoom] = useState(false);
+
+    // SharePoint photo count (to avoid loading images locally)
+    const [sharepointPhotoCount, setSharepointPhotoCount] = useState(null);
+    const [loadingSharepointCount, setLoadingSharepointCount] = useState(false);
 
     useEffect(() => {
         const loadData = async () => {
@@ -45,29 +55,18 @@ function PhotoCaptureScreen() {
                 setSite(currentSite);
                 setPhotoReq(currentPhotoReq);
 
-                // Load existing photos for this requirement
+                // MEMORY FIX: Only load PENDING photos (not synced ones)
+                // Synced photos are in SharePoint and don't need to be displayed locally
                 const allPhotos = await StorageService.getPhotos(siteId);
-                const photos = allPhotos.filter(p => p.photoReqId.toString() === photoReqId);
-                setCapturedPhotos(photos);
-                photosRef.current = photos;
+                const pendingPhotos = allPhotos.filter(p =>
+                    p.photoReqId.toString() === photoReqId &&
+                    p.status === 'pending'
+                );
+                setCapturedPhotos(pendingPhotos);
+                photosRef.current = pendingPhotos;
+                console.log(`Loaded ${pendingPhotos.length} pending photos for display`);
 
-                // Reconcile with SharePoint (sync deletions and downloads)
-                if (SyncService.isOnline()) {
-                    try {
-                        const result = await SyncService.reconcilePhotos(siteId, currentSite.phase, currentSite.name);
-                        console.log(`Photo screen reconciliation: Deleted ${result.deleted}, Downloaded ${result.downloaded}`);
-
-                        // If anything changed, reload photos
-                        if (result.deleted > 0 || result.downloaded > 0) {
-                            const updatedPhotos = await StorageService.getPhotos(siteId);
-                            const filteredPhotos = updatedPhotos.filter(p => p.photoReqId.toString() === photoReqId);
-                            setCapturedPhotos(filteredPhotos);
-                            photosRef.current = filteredPhotos;
-                        }
-                    } catch (error) {
-                        console.error('Reconciliation failed:', error);
-                    }
-                }
+                // Skip reconciliation since it can cause issues - just show pending photos
             } catch (error) {
                 console.error('Error loading photo capture data:', error);
                 alert('Failed to load data. Please try again.');
@@ -76,6 +75,54 @@ function PhotoCaptureScreen() {
         };
 
         loadData();
+
+        // Fetch SharePoint photo count (separate from local photos)
+        const fetchSharePointCount = async () => {
+            if (!siteId || !photoReqId) return;
+
+            try {
+                setLoadingSharepointCount(true);
+                const sites = await StorageService.getSites();
+                const currentSite = sites.find(s => s.id.toString() === siteId);
+
+                if (currentSite) {
+                    const photoReqs = await StorageService.getPhotoRequirements();
+                    const currentReq = photoReqs.find(r => r.id.toString() === photoReqId);
+
+                    if (currentReq) {
+                        // Sanitize category name to match folder name created by Power Automate
+                        const sanitizedCategory = currentReq.name
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]+/g, '_')
+                            .replace(/^_+|_+$/g, '');
+
+                        // Try to list files in the category subfolder (e.g., PHOTOS/overall_compound_2)
+                        try {
+                            const folderPath = `PHOTOS/${sanitizedCategory}`;
+                            const files = await SharePointService.listFiles(currentSite.phase, currentSite.name, folderPath);
+                            const photoCount = files.filter(f => !f.name.endsWith('.zip')).length;
+                            setSharepointPhotoCount(photoCount);
+                            console.log(`SharePoint subfolder "${sanitizedCategory}": ${photoCount} photos`);
+                        } catch (err) {
+                            // Folder doesn't exist yet - fallback to filename matching in root
+                            const files = await SharePointService.listFiles(currentSite.phase, currentSite.name, 'PHOTOS');
+                            const matchingPhotos = files.filter(f =>
+                                !f.name.endsWith('.zip') && f.name.toLowerCase().includes(currentReq.name.toLowerCase())
+                            );
+                            setSharepointPhotoCount(matchingPhotos.length);
+                            console.log(`SharePoint root (fallback) for "${currentReq.name}": ${matchingPhotos.length}`);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching SharePoint photo count:', error);
+                setSharepointPhotoCount(0);
+            } finally {
+                setLoadingSharepointCount(false);
+            }
+        };
+
+        fetchSharePointCount();
 
         // Robust Geolocation Handling
         let watchId = null;
@@ -140,6 +187,74 @@ function PhotoCaptureScreen() {
             }
         };
     }, [siteId, photoReqId, navigate]);
+
+    // Device orientation (compass heading) tracking
+    useEffect(() => {
+        let orientationHandler = null;
+
+        const handleOrientation = (event) => {
+            // Get compass heading (webkitCompassHeading for iOS, alpha for Android)
+            let compassHeading = null;
+
+            if (event.webkitCompassHeading !== undefined) {
+                // iOS - webkitCompassHeading is the compass heading
+                compassHeading = event.webkitCompassHeading;
+            } else if (event.alpha !== null) {
+                // Android - alpha is rotation around z-axis, need to convert
+                // This gives approximate heading (not as accurate as iOS)
+                compassHeading = 360 - event.alpha;
+            }
+
+            if (compassHeading !== null) {
+                setHeading(Math.round(compassHeading));
+                headingRef.current = Math.round(compassHeading);
+            }
+        };
+
+        // Request permission on iOS 13+
+        if (typeof DeviceOrientationEvent !== 'undefined' &&
+            typeof DeviceOrientationEvent.requestPermission === 'function') {
+            // iOS 13+ requires permission request on user gesture
+            // We'll try to request it, but it may fail without user gesture
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    if (response === 'granted') {
+                        window.addEventListener('deviceorientationabsolute', handleOrientation);
+                        window.addEventListener('deviceorientation', handleOrientation);
+                        orientationHandler = handleOrientation;
+                    }
+                })
+                .catch(console.error);
+        } else if ('DeviceOrientationEvent' in window) {
+            // Android and older iOS
+            window.addEventListener('deviceorientationabsolute', handleOrientation);
+            window.addEventListener('deviceorientation', handleOrientation);
+            orientationHandler = handleOrientation;
+        }
+
+        return () => {
+            if (orientationHandler) {
+                window.removeEventListener('deviceorientationabsolute', orientationHandler);
+                window.removeEventListener('deviceorientation', orientationHandler);
+            }
+        };
+    }, []);
+
+    // Camera cleanup on unmount - critical for memory management
+    useEffect(() => {
+        return () => {
+            // Stop camera stream on unmount
+            if (streamRef.current) {
+                console.log('Cleaning up camera stream on unmount');
+                streamRef.current.getTracks().forEach(track => track.stop());
+                streamRef.current = null;
+            }
+            // Clear video source
+            if (videoRef.current) {
+                videoRef.current.srcObject = null;
+            }
+        };
+    }, []);
 
     const startCamera = async () => {
         try {
@@ -230,6 +345,49 @@ function PhotoCaptureScreen() {
         }
     };
 
+    // Play camera shutter sound
+    const playShutterSound = () => {
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+            // Create a "click" sound using oscillators
+            const duration = 0.15;
+            const now = audioContext.currentTime;
+
+            // High-frequency click
+            const osc1 = audioContext.createOscillator();
+            const gain1 = audioContext.createGain();
+            osc1.type = 'square';
+            osc1.frequency.setValueAtTime(1200, now);
+            osc1.frequency.exponentialRampToValueAtTime(400, now + duration);
+            gain1.gain.setValueAtTime(0.3, now);
+            gain1.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            osc1.connect(gain1);
+            gain1.connect(audioContext.destination);
+
+            // Low "thunk" sound
+            const osc2 = audioContext.createOscillator();
+            const gain2 = audioContext.createGain();
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(150, now);
+            osc2.frequency.exponentialRampToValueAtTime(50, now + duration * 0.5);
+            gain2.gain.setValueAtTime(0.4, now);
+            gain2.gain.exponentialRampToValueAtTime(0.01, now + duration * 0.5);
+            osc2.connect(gain2);
+            gain2.connect(audioContext.destination);
+
+            osc1.start(now);
+            osc1.stop(now + duration);
+            osc2.start(now);
+            osc2.stop(now + duration * 0.5);
+
+            // Clean up
+            setTimeout(() => audioContext.close(), 200);
+        } catch (e) {
+            console.log('Audio not supported:', e);
+        }
+    };
+
     const capturePhoto = useCallback(async () => {
         if (!videoRef.current || !site || !photoReq) {
             console.error('Missing data for capture:', {
@@ -252,6 +410,9 @@ function PhotoCaptureScreen() {
             alert('Error: Camera not ready. Please wait for the video to load.');
             return;
         }
+
+        // Play shutter sound immediately
+        playShutterSound();
 
         const ctx = canvas.getContext('2d');
         ctx.drawImage(videoRef.current, 0, 0);
@@ -284,9 +445,20 @@ function PhotoCaptureScreen() {
             // Prepare text lines
             const lines = [
                 `Site: ${site.name} (${site.id})`,
-                locationStr,
-                `Date: ${dateStr}`
+                locationStr
             ];
+
+            // Add heading if available
+            const hdg = headingRef.current;
+            if (hdg !== null) {
+                // Convert heading to cardinal direction
+                const cardinalDirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+                const index = Math.round(hdg / 45) % 8;
+                const cardinal = cardinalDirs[index];
+                lines.push(`Heading: ${hdg}° ${cardinal}`);
+            }
+
+            lines.push(`Date: ${dateStr}`);
 
             // Text styling
             const fontSize = Math.max(16, Math.floor(canvas.height / 40)); // Responsive font size
@@ -451,6 +623,24 @@ function PhotoCaptureScreen() {
             link.download = photo.filename;
             link.click();
         });
+    };
+
+    // Open SharePoint site category subfolder for this requirement
+    const openInSharePoint = () => {
+        if (site && photoReq) {
+            // Open the specific category subfolder (e.g., PHOTOS/overall_compound_2)
+            const url = SharePointService.getCategoryFolderUrl(site.phase, site.name, photoReq.name);
+            console.log('Opening SharePoint category URL:', url);
+            window.open(url, '_blank');
+        } else if (site) {
+            // Fallback to PHOTOS folder
+            const url = SharePointService.getPhotoFolderUrl(site.phase, site.name);
+            window.open(url, '_blank');
+        } else {
+            // Fallback to root
+            const siteUrl = sharepointConfig.sharepoint.siteUrl;
+            window.open(`${siteUrl}/Shared%20Documents`, '_blank');
+        }
     };
 
     // Compress image using canvas (reduces file size significantly)
@@ -674,32 +864,77 @@ function PhotoCaptureScreen() {
 
                 {/* Captured Photos */}
                 <div className="card mb-3">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                        <h3 style={{ fontSize: '16px', margin: 0 }}>
-                            Captured Photos ({capturedPhotos.length})
-                        </h3>
-                        {/* GPS Status Indicator */}
-                        <div style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <div style={{
-                                width: '8px',
-                                height: '8px',
-                                borderRadius: '50%',
-                                backgroundColor: gpsStatus === 'locked' ? '#4caf50' : (gpsStatus === 'error' ? '#f44336' : '#ff9800'),
-                                boxShadow: `0 0 4px ${gpsStatus === 'locked' ? '#4caf50' : (gpsStatus === 'error' ? '#f44336' : '#ff9800')}`
-                            }}></div>
-                            <span style={{ color: '#666' }}>
-                                {gpsStatus === 'locked' ? 'GPS Ready' : (gpsStatus === 'error' ? 'GPS Error' : 'Finding Loc...')}
-                            </span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                        <div>
+                            <h3 style={{ fontSize: '16px', margin: 0 }}>
+                                Photos
+                            </h3>
+                            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                {loadingSharepointCount ? (
+                                    <span>☁️ Checking SharePoint...</span>
+                                ) : sharepointPhotoCount !== null ? (
+                                    <span style={{ color: sharepointPhotoCount > 0 ? '#4caf50' : '#999' }}>
+                                        ☁️ {sharepointPhotoCount} in SharePoint
+                                    </span>
+                                ) : (
+                                    <span>☁️ Could not check SharePoint</span>
+                                )}
+                                {capturedPhotos.length > 0 && (
+                                    <span style={{ marginLeft: '12px' }}>
+                                        📱 {capturedPhotos.length} local (pending upload)
+                                    </span>
+                                )}
+                            </div>
                         </div>
-                        {capturedPhotos.length > 0 && (
-                            <button onClick={downloadPhotos} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '14px', marginLeft: '8px' }}>
-                                💾 Download All
+                        {/* GPS Status Indicator */}
+                        <div style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <div style={{
+                                    width: '8px',
+                                    height: '8px',
+                                    borderRadius: '50%',
+                                    backgroundColor: gpsStatus === 'locked' ? '#4caf50' : (gpsStatus === 'error' ? '#f44336' : '#ff9800'),
+                                    boxShadow: `0 0 4px ${gpsStatus === 'locked' ? '#4caf50' : (gpsStatus === 'error' ? '#f44336' : '#ff9800')}`
+                                }}></div>
+                                <span style={{ color: '#666' }}>
+                                    {gpsStatus === 'locked' ? 'GPS' : (gpsStatus === 'error' ? 'GPS Error' : 'GPS...')}
+                                </span>
+                            </div>
+                            {/* Compass Heading Indicator */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontSize: '14px' }}>🧭</span>
+                                <span style={{ color: heading !== null ? '#666' : '#999' }}>
+                                    {heading !== null ? (
+                                        <>
+                                            {heading}° {['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(heading / 45) % 8]}
+                                        </>
+                                    ) : 'No compass'}
+                                </span>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            {capturedPhotos.length > 0 && (
+                                <button onClick={downloadPhotos} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '14px' }}>
+                                    💾 Download
+                                </button>
+                            )}
+                            <button onClick={openInSharePoint} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '14px' }}>
+                                ☁️ View in SharePoint
                             </button>
-                        )}
+                        </div>
                     </div>
 
                     {capturedPhotos.length === 0 ? (
-                        <p className="text-muted text-center">No photos captured yet</p>
+                        <div className="text-muted text-center" style={{ padding: '12px' }}>
+                            {sharepointPhotoCount > 0 ? (
+                                <p style={{ margin: 0 }}>
+                                    ✓ {sharepointPhotoCount} photos already uploaded to SharePoint.<br />
+                                    <span style={{ fontSize: '12px' }}>Use "View in SharePoint" to see them.</span>
+                                </p>
+                            ) : (
+                                <p style={{ margin: 0 }}>No photos captured yet</p>
+                            )}
+                        </div>
                     ) : (
                         <div className="grid">
                             {capturedPhotos.map(photo => (

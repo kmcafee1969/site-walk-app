@@ -2,20 +2,34 @@ import React, { useState } from 'react';
 import PinAuthService from '../services/PinAuthService';
 
 function PinLoginScreen({ onLoginSuccess }) {
+    const [username, setUsername] = useState('');
     const [pin, setPin] = useState('');
     const [error, setError] = useState(null);
+    const [loading, setLoading] = useState(false);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null);
+        setLoading(true);
 
-        if (PinAuthService.login(pin)) {
-            onLoginSuccess();
-        } else {
-            setError('Incorrect PIN. Please try again.');
+        try {
+            const result = await PinAuthService.login(username, pin);
+
+            if (result.success) {
+                onLoginSuccess(result.user);
+            } else {
+                setError(result.error || 'Invalid username or PIN.');
+                setPin('');
+            }
+        } catch (err) {
+            setError('Login failed. Please try again.');
             setPin('');
+        } finally {
+            setLoading(false);
         }
     };
+
+    const isFormValid = username.trim().length > 0 && pin.length >= 4;
 
     return (
         <div style={{
@@ -49,28 +63,49 @@ function PinLoginScreen({ onLoginSuccess }) {
                     marginBottom: '32px',
                     fontSize: '14px'
                 }}>
-                    Enter the access PIN to continue
+                    Enter your credentials to continue
                 </p>
 
                 <form onSubmit={handleSubmit}>
+                    <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Username"
+                        autoFocus
+                        autoComplete="username"
+                        autoCapitalize="off"
+                        style={{
+                            width: '100%',
+                            padding: '14px 16px',
+                            fontSize: '16px',
+                            textAlign: 'left',
+                            borderRadius: '8px',
+                            border: '2px solid #ddd',
+                            marginBottom: '12px',
+                            boxSizing: 'border-box'
+                        }}
+                    />
+
                     <input
                         type="tel"
                         pattern="[0-9]*"
                         inputMode="numeric"
                         value={pin}
                         onChange={(e) => setPin(e.target.value)}
-                        placeholder="Enter PIN"
+                        placeholder="PIN"
                         maxLength="6"
-                        autoFocus
+                        autoComplete="current-password"
                         style={{
                             width: '100%',
-                            padding: '16px',
-                            fontSize: '24px',
+                            padding: '14px 16px',
+                            fontSize: '20px',
                             textAlign: 'center',
                             borderRadius: '8px',
                             border: '2px solid #ddd',
                             marginBottom: '20px',
-                            letterSpacing: '4px'
+                            letterSpacing: '4px',
+                            boxSizing: 'border-box'
                         }}
                     />
 
@@ -78,7 +113,10 @@ function PinLoginScreen({ onLoginSuccess }) {
                         <div style={{
                             color: '#c62828',
                             marginBottom: '20px',
-                            fontSize: '14px'
+                            fontSize: '14px',
+                            padding: '10px',
+                            background: '#ffebee',
+                            borderRadius: '6px'
                         }}>
                             {error}
                         </div>
@@ -86,22 +124,30 @@ function PinLoginScreen({ onLoginSuccess }) {
 
                     <button
                         type="submit"
-                        disabled={pin.length < 4}
+                        disabled={!isFormValid || loading}
                         style={{
                             width: '100%',
                             padding: '14px 24px',
-                            background: pin.length >= 4 ? '#1976d2' : '#ccc',
+                            background: isFormValid && !loading ? '#1976d2' : '#ccc',
                             color: 'white',
                             border: 'none',
                             borderRadius: '6px',
                             fontSize: '16px',
                             fontWeight: '600',
-                            cursor: pin.length >= 4 ? 'pointer' : 'not-allowed',
+                            cursor: isFormValid && !loading ? 'pointer' : 'not-allowed',
                         }}
                     >
-                        Enter App
+                        {loading ? 'Signing in...' : 'Sign In'}
                     </button>
                 </form>
+
+                <p style={{
+                    marginTop: '24px',
+                    fontSize: '12px',
+                    color: '#999'
+                }}>
+                    Contact your administrator if you need access
+                </p>
             </div>
         </div>
     );

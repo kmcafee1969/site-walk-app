@@ -12,7 +12,9 @@ function SiteDetailScreen() {
     const navigate = useNavigate();
     const [site, setSite] = useState(null);
     const [photoRequirements, setPhotoRequirements] = useState([]);
-    const [capturedPhotos, setCapturedPhotos] = useState({});
+    const [localPendingCounts, setLocalPendingCounts] = useState({}); // Changed from capturedPhotos
+    const [sharepointCounts, setSharepointCounts] = useState({}); // NEW: SharePoint photo counts per req
+    const [loadingSharepointCounts, setLoadingSharepointCounts] = useState(false); // NEW
     const [questionnaire, setQuestionnaire] = useState(null);
     const [hasRemoteQuestionnaire, setHasRemoteQuestionnaire] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
@@ -58,8 +60,8 @@ function SiteDetailScreen() {
             // Log online status
             appendLog(`Online Status: ${isOnline}`);
 
-            // Load site photos
-            appendLog('Loading local photos...');
+            // Group requirements by category
+            appendLog('Grouping photo requirements...');
             photoReqs.forEach(req => {
                 const category = req.category || 'General';
                 if (!grouped[category]) {
@@ -70,17 +72,130 @@ function SiteDetailScreen() {
 
             setPhotoRequirements(grouped);
 
-            // Load captured photos for this site
-            const photos = await StorageService.getPhotos(siteId);
-            const photosByReq = {};
-            photos.forEach(photo => {
+            // MEMORY FIX: Load only photo metadata (no blob/dataUrl) to count local pending photos
+            appendLog('Loading local photo metadata (lightweight)...');
+            const photoMeta = await StorageService.getPhotoMetadata(siteId);
+            const pendingByReq = {};
+            photoMeta.filter(p => p.status === 'pending').forEach(photo => {
                 const reqId = photo.photoReqId.toString();
-                if (!photosByReq[reqId]) {
-                    photosByReq[reqId] = [];
-                }
-                photosByReq[reqId].push(photo);
+                pendingByReq[reqId] = (pendingByReq[reqId] || 0) + 1;
             });
-            setCapturedPhotos(photosByReq);
+            setLocalPendingCounts(pendingByReq);
+            appendLog(`Found ${Object.values(pendingByReq).reduce((a, b) => a + b, 0)} local pending photos`);
+
+            // MEMORY FIX: Check SharePoint for photo counts (no image loading)
+            // OPTIMIZED: Uses folder property and parallel requests
+            if (isOnline) {
+                setLoadingSharepointCounts(true);
+                try {
+                    appendLog('Checking SharePoint for uploaded photos...');
+
+                    // List items in PHOTOS folder (includes subfolders and files)
+                    const items = await SharePointService.listFiles(currentSite.phase, currentSite.name, 'PHOTOS');
+                    appendLog(`SharePoint PHOTOS folder has ${items.length} items`);
+
+                    // Build a map of sanitized requirement names to requirement IDs
+                    const sanitizeForFolder = (name) => {
+                        return name
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]+/g, '_')
+                            .replace(/^_+|_+$/g, '');
+                    };
+
+                    const reqNameToId = {};
+                    photoReqs.forEach(req => {
+                        const sanitized = sanitizeForFolder(req.name);
+                        reqNameToId[sanitized] = req.id.toString();
+                    });
+
+                    const spCountByReq = {};
+                    const allSpFileNames = new Set();
+
+                    // Separate folders from files using the 'folder' property from Graph API
+                    const folders = items.filter(item => item.folder && reqNameToId[sanitizeForFolder(item.name)]);
+                    const rootFiles = items.filter(item => !item.folder && !item.name.endsWith('.zip'));
+
+                    appendLog(`Found ${folders.length} category folders, ${rootFiles.length} root files`);
+
+                    // Process folders in parallel for speed
+                    if (folders.length > 0) {
+                        const folderPromises = folders.map(async (folder) => {
+                            try {
+                                const folderPath = `PHOTOS/${folder.name}`;
+                                const folderFiles = await SharePointService.listFiles(
+                                    currentSite.phase,
+                                    currentSite.name,
+                                    folderPath
+                                );
+                                const photoFiles = folderFiles.filter(f => !f.name.endsWith('.zip'));
+                                return { folder, files: photoFiles };
+                            } catch (err) {
+                                return { folder, files: [] };
+                            }
+                        });
+
+                        const folderResults = await Promise.all(folderPromises);
+
+                        for (const { folder, files } of folderResults) {
+                            const sanitizedName = sanitizeForFolder(folder.name);
+                            const reqId = reqNameToId[sanitizedName];
+                            if (reqId && files.length > 0) {
+                                spCountByReq[reqId] = (spCountByReq[reqId] || 0) + files.length;
+                                files.forEach(f => allSpFileNames.add(f.name));
+                            }
+                        }
+                    }
+
+                    // Process root files with filename matching (for legacy photos)
+                    for (const file of rootFiles) {
+                        let matchedReqId = null;
+                        let matchedLength = 0;
+
+                        photoReqs.forEach(req => {
+                            if (file.name.toLowerCase().includes(req.name.toLowerCase())) {
+                                if (req.name.length > matchedLength) {
+                                    matchedLength = req.name.length;
+                                    matchedReqId = req.id.toString();
+                                }
+                            }
+                        });
+
+                        if (matchedReqId) {
+                            spCountByReq[matchedReqId] = (spCountByReq[matchedReqId] || 0) + 1;
+                        }
+                        allSpFileNames.add(file.name);
+                    }
+
+                    setSharepointCounts(spCountByReq);
+                    const totalCount = Object.values(spCountByReq).reduce((a, b) => a + b, 0);
+                    appendLog(`Found ${totalCount} photos in SharePoint across ${Object.keys(spCountByReq).length} requirements`);
+
+                    // AUTO-SYNC: Mark local pending photos as synced if found in SharePoint
+                    const localPhotos = await StorageService.getPhotos(siteId);
+                    let syncedCount = 0;
+                    for (const photo of localPhotos) {
+                        if (photo.status === 'pending' && allSpFileNames.has(photo.filename)) {
+                            await StorageService.updatePhotoStatus(photo.id, 'synced');
+                            syncedCount++;
+                        }
+                    }
+                    if (syncedCount > 0) {
+                        appendLog(`Auto-synced ${syncedCount} local photos that were already in SharePoint`);
+                        // Refresh local counts
+                        const updatedMeta = await StorageService.getPhotoMetadata(siteId);
+                        const newPendingByReq = {};
+                        updatedMeta.filter(p => p.status === 'pending').forEach(photo => {
+                            const reqId = photo.photoReqId.toString();
+                            newPendingByReq[reqId] = (newPendingByReq[reqId] || 0) + 1;
+                        });
+                        setLocalPendingCounts(newPendingByReq);
+                    }
+                } catch (err) {
+                    appendLog(`SharePoint count check failed: ${err.message}`);
+                } finally {
+                    setLoadingSharepointCounts(false);
+                }
+            }
 
             // Load questionnaire
             const quest = await StorageService.getQuestionnaire(siteId);
@@ -148,17 +263,14 @@ function SiteDetailScreen() {
                         if (deleted > 0 || downloaded > 0) {
                             console.log(`Reconciliation: Deleted ${deleted}, Downloaded ${downloaded} photos`);
 
-                            // Reload photos to update UI
-                            StorageService.getPhotos(siteId).then(updatedPhotos => {
-                                const newPhotosByReq = {};
-                                updatedPhotos.forEach(photo => {
+                            // MEMORY FIX: Reload metadata only, not full photos
+                            StorageService.getPhotoMetadata(siteId).then(updatedMeta => {
+                                const newPendingByReq = {};
+                                updatedMeta.filter(p => p.status === 'pending').forEach(photo => {
                                     const reqId = photo.photoReqId.toString();
-                                    if (!newPhotosByReq[reqId]) {
-                                        newPhotosByReq[reqId] = [];
-                                    }
-                                    newPhotosByReq[reqId].push(photo);
+                                    newPendingByReq[reqId] = (newPendingByReq[reqId] || 0) + 1;
                                 });
-                                setCapturedPhotos(newPhotosByReq);
+                                setLocalPendingCounts(newPendingByReq);
                             });
                         }
                     })
@@ -177,9 +289,11 @@ function SiteDetailScreen() {
     const handleUploadAllPhotos = async () => {
         if (!site) return;
 
-        const allPhotos = Object.values(capturedPhotos).flat();
+        // For upload, we need the full photo data - load it now
+        const allPhotos = await StorageService.getPhotos(siteId);
+        const pendingPhotos = allPhotos.filter(p => p.status === 'pending');
 
-        if (allPhotos.length === 0) {
+        if (pendingPhotos.length === 0) {
             alert('No photos to upload');
             return;
         }
@@ -191,7 +305,7 @@ function SiteDetailScreen() {
         setShowUploadModal(true);
         setUploadProgress({
             current: 0,
-            total: allPhotos.length,
+            total: pendingPhotos.length,
             status: isOnline ? 'Starting upload...' : 'Queueing for sync (Offline)...'
         });
 
@@ -199,64 +313,114 @@ function SiteDetailScreen() {
             let successCount = 0;
             let failCount = 0;
             const errors = [];
+            const uploadedFiles = []; // Track uploaded filenames
 
-            // ZIP OPTIMIZATION
+            // CATEGORY-BASED ZIP OPTIMIZATION
             if (isOnline) {
+                // Group photos by category (photoReqName contains the category)
+                const photosByCategory = {};
+                for (const photo of pendingPhotos) {
+                    // Use photoReqName as the category key
+                    const category = photo.photoReqName || 'uncategorized';
+                    if (!photosByCategory[category]) {
+                        photosByCategory[category] = [];
+                    }
+                    photosByCategory[category].push(photo);
+                }
+
+                const categories = Object.keys(photosByCategory);
+                const totalCategories = categories.length;
+                let categoryIndex = 0;
+
                 setUploadProgress({
                     current: 0,
-                    total: 100,
-                    status: 'Compressing photos into Zip bundle...'
+                    total: totalCategories,
+                    status: `Creating ${totalCategories} category ZIP files...`
                 });
 
-                const zip = new JSZip();
+                // Process each category
+                for (const category of categories) {
+                    const categoryPhotos = photosByCategory[category];
 
-                // Add photos to zip
-                for (let i = 0; i < allPhotos.length; i++) {
-                    const photo = allPhotos[i];
-                    // Get blob from dataURL if blob is missing (from IDB reload)
-                    let blobToAdd = photo.blob;
-                    if (!blobToAdd) {
-                        // Convert dataURL to blob
-                        const res = await fetch(photo.dataUrl);
-                        blobToAdd = await res.blob();
+                    // Sanitize category name for filename
+                    const sanitizedCategory = category
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, '_')  // Replace non-alphanumeric with underscore
+                        .replace(/^_+|_+$/g, '');     // Trim leading/trailing underscores
+
+                    const baseFilename = `${sanitizedCategory}.zip`;
+
+                    setUploadProgress({
+                        current: categoryIndex,
+                        total: totalCategories,
+                        status: `Processing "${category}" (${categoryPhotos.length} photos)...`
+                    });
+
+                    try {
+                        // Create ZIP for this category
+                        const zip = new JSZip();
+
+                        for (const photo of categoryPhotos) {
+                            let blobToAdd = photo.blob;
+                            if (!blobToAdd && photo.dataUrl) {
+                                const res = await fetch(photo.dataUrl);
+                                blobToAdd = await res.blob();
+                            }
+                            if (blobToAdd) {
+                                zip.file(photo.filename, blobToAdd);
+                            }
+                        }
+
+                        const zipBlob = await zip.generateAsync({ type: "blob" });
+                        const zipSizeMB = (zipBlob.size / 1024 / 1024).toFixed(2);
+
+                        // Get next available filename (prevents overwriting)
+                        const finalFilename = await SharePointService.getNextAvailableFilename(
+                            site.phase,
+                            site.name,
+                            baseFilename,
+                            'PHOTOS'
+                        );
+
+                        setUploadProgress({
+                            current: categoryIndex,
+                            total: totalCategories,
+                            status: `Uploading "${finalFilename}" (${zipSizeMB} MB)...`
+                        });
+
+                        // Upload the category ZIP
+                        await SharePointService.uploadZip(
+                            site.phase,
+                            site.name,
+                            site.id,
+                            finalFilename,
+                            zipBlob
+                        );
+
+                        // Mark photos in this category as synced
+                        for (const photo of categoryPhotos) {
+                            await StorageService.updatePhotoStatus(photo.id, 'synced');
+                        }
+
+                        uploadedFiles.push(`${finalFilename} (${categoryPhotos.length} photos, ${zipSizeMB} MB)`);
+                        successCount += categoryPhotos.length;
+                        appendLog(`✓ Uploaded: ${finalFilename}`);
+
+                    } catch (catError) {
+                        console.error(`Error uploading category ${category}:`, catError);
+                        errors.push(`${category}: ${catError.message}`);
+                        failCount += categoryPhotos.length;
                     }
-                    // Add to zip (flat structure as requested, or matching simple structure)
-                    zip.file(photo.filename, blobToAdd);
+
+                    categoryIndex++;
                 }
-
-                // Generate Zip
-                const zipBlob = await zip.generateAsync({ type: "blob" });
-                // Filename: {site name} [site ID] PHOTOS.zip
-                const zipFilename = `${site.name} ${site.id} PHOTOS.zip`;
-
-                setUploadProgress({
-                    current: 50,
-                    total: 100,
-                    status: `Uploading Zip Bundle (${(zipBlob.size / 1024 / 1024).toFixed(2)} MB)...`
-                });
-
-                await SharePointService.uploadZip(
-                    site.phase,
-                    site.name,
-                    site.id,
-                    zipFilename,
-                    zipBlob
-                );
-
-                // Mark ALL as synced so they don't upload again, but stay safe on device
-                for (const photo of allPhotos) {
-                    await StorageService.updatePhotoStatus(photo.id, 'synced');
-                }
-
-                appendLog(`✓ Uploaded Zip Bundle: ${zipFilename}`);
-                successCount = allPhotos.length;
 
             } else {
                 // FALLBACK: Offline Queue (Individual items)
-                for (let i = 0; i < allPhotos.length; i++) {
-                    const photo = allPhotos[i];
+                for (let i = 0; i < pendingPhotos.length; i++) {
+                    const photo = pendingPhotos[i];
                     // Offline: Add to queue
-                    console.log(`Queueing photo ${i + 1}/${allPhotos.length}: ${photo.filename}`);
+                    console.log(`Queueing photo ${i + 1}/${pendingPhotos.length}: ${photo.filename}`);
                     await SyncService.addToQueue('PHOTO', {
                         siteId: site.id,
                         photoId: photo.id,
@@ -275,7 +439,7 @@ function SiteDetailScreen() {
                     setUploadProgress({
                         current: 100,
                         total: 100,
-                        status: `✅ Success! Photos zipped & uploaded.\n\nFile: ${site.name} ${site.id} PHOTOS.zip\nLocation: ${folderPath}`
+                        status: `✅ Success! ${successCount} photos uploaded.\n\nFiles created:\n${uploadedFiles.join('\n')}\n\nLocation: ${folderPath}`
                     });
 
                     // Send email notification (Silent)
@@ -283,15 +447,15 @@ function SiteDetailScreen() {
                         .catch(err => console.error('Email notification failed:', err));
                 } else {
                     setUploadProgress({
-                        current: allPhotos.length,
-                        total: allPhotos.length,
+                        current: pendingPhotos.length,
+                        total: pendingPhotos.length,
                         status: `✅ Offline Mode: All ${successCount} photos queued.\n\nThey will automatically upload when you reconnect to the internet.`
                     });
                 }
             } else {
                 setUploadProgress({
-                    current: allPhotos.length,
-                    total: allPhotos.length,
+                    current: pendingPhotos.length,
+                    total: pendingPhotos.length,
                     status: `⚠️ Partial Success\n\n${successCount} ${isOnline ? 'uploaded' : 'queued'}\n${failCount} failed\n\nErrors:\n${errors.slice(0, 3).join('\n')}`
                 });
             }
@@ -302,7 +466,7 @@ function SiteDetailScreen() {
             console.error('Upload error:', error);
             setUploadProgress({
                 current: 0,
-                total: allPhotos.length,
+                total: pendingPhotos.length,
                 status: `❌ Process failed: ${error.message}`
             });
         }
@@ -369,7 +533,24 @@ function SiteDetailScreen() {
 
                 {/* Photo Requirements */}
                 <div className="card mb-3">
-                    <h3 style={{ marginBottom: '12px' }}>Photo Requirements</h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <h3 style={{ margin: 0 }}>Photo Requirements</h3>
+                        {site && (
+                            <button
+                                onClick={() => window.open(SharePointService.getPhotoFolderUrl(site.phase, site.name), '_blank')}
+                                className="btn btn-secondary"
+                                style={{ padding: '6px 12px', fontSize: '12px' }}
+                            >
+                                ☁️ View All in SharePoint
+                            </button>
+                        )}
+                    </div>
+
+                    {loadingSharepointCounts && (
+                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+                            ☁️ Checking SharePoint for uploaded photos...
+                        </div>
+                    )}
 
                     {Object.entries(photoRequirements).map(([category, reqs]) => (
                         <div key={category} style={{ marginBottom: '16px' }}>
@@ -378,8 +559,10 @@ function SiteDetailScreen() {
                             </h4>
 
                             {reqs.map(req => {
-                                const photos = capturedPhotos[req.id] || [];
-                                const isComplete = photos.length > 0;
+                                const spCount = sharepointCounts[req.id] || 0;
+                                const localPending = localPendingCounts[req.id] || 0;
+                                const totalPhotos = spCount + localPending;
+                                const isComplete = totalPhotos > 0;
 
                                 return (
                                     <Link
@@ -406,11 +589,26 @@ function SiteDetailScreen() {
                                                             {req.description}
                                                         </div>
                                                     )}
-                                                    {photos.length > 0 && (
-                                                        <div style={{ fontSize: '12px', color: 'var(--success-color)', marginTop: '4px' }}>
-                                                            {photos.length} photo{photos.length > 1 ? 's' : ''} captured
-                                                        </div>
-                                                    )}
+                                                    {/* Show photo counts */}
+                                                    <div style={{ fontSize: '12px', marginTop: '4px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                                                        {spCount > 0 && (
+                                                            <span
+                                                                style={{ color: '#4caf50', cursor: 'pointer', textDecoration: 'underline' }}
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    window.open(SharePointService.getCategoryFolderUrl(site.phase, site.name, req.name), '_blank');
+                                                                }}
+                                                            >
+                                                                ☁️ {spCount} in SharePoint →
+                                                            </span>
+                                                        )}
+                                                        {localPending > 0 && (
+                                                            <span style={{ color: '#ff9800' }}>
+                                                                📱 {localPending} pending upload
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 <div style={{ fontSize: '24px' }}>
                                                     {isComplete ? '✓' : '📷'}
@@ -423,8 +621,8 @@ function SiteDetailScreen() {
                         </div>
                     ))}
 
-                    {/* Upload All Photos Button */}
-                    {Object.values(capturedPhotos).flat().length > 0 && (
+                    {/* Upload All Photos Button - now based on local pending counts */}
+                    {Object.values(localPendingCounts).reduce((a, b) => a + b, 0) > 0 && (
                         <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid var(--border-color)' }}>
                             <button
                                 onClick={handleUploadAllPhotos}
@@ -435,7 +633,7 @@ function SiteDetailScreen() {
                                 {isUploading ? (
                                     <>⏳ Uploading to SharePoint...</>
                                 ) : (
-                                    <>☁️ Upload All Photos to SharePoint ({Object.values(capturedPhotos).flat().length} photos)</>
+                                    <>☁️ Upload All Photos to SharePoint ({Object.values(localPendingCounts).reduce((a, b) => a + b, 0)} photos)</>
                                 )}
                             </button>
                             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px', textAlign: 'center' }}>

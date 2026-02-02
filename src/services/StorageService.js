@@ -76,6 +76,22 @@ export const StorageService = {
         return db.getAllFromIndex('photos', 'siteId', siteId);
     },
 
+    // Lightweight metadata-only retrieval (excludes blob/dataUrl to save memory)
+    async getPhotoMetadata(siteId) {
+        const db = await this.getDB();
+        const photos = await db.getAllFromIndex('photos', 'siteId', siteId);
+        // Return only metadata, not the memory-heavy blob/dataUrl
+        return photos.map(p => ({
+            id: p.id,
+            photoReqId: p.photoReqId,
+            photoReqName: p.photoReqName,
+            filename: p.filename,
+            status: p.status,
+            capturedAt: p.capturedAt,
+            size: p.size
+        }));
+    },
+
     async getAllPhotos() {
         const db = await this.getDB();
         return db.getAll('photos');
