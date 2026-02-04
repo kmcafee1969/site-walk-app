@@ -163,7 +163,8 @@ export const SyncService = {
             // 3. Find photos to delete (Local exists, Server missing)
             // Delete photos if:
             // - They don't exist on the server, AND
-            // - Either: status is not 'pending', OR status is 'pending' but photo is old (>5 min)
+            // - Status is NOT 'synced' (synced photos were uploaded via ZIP, keep them!)
+            // - Either: status is not 'pending', OR status is 'pending' but photo is old (>24 hours)
             const now = new Date();
             const photosToDelete = cleanedPhotos.filter(p => {
                 const notOnServer = !serverFilenames.has(p.filename);
@@ -171,6 +172,13 @@ export const SyncService = {
                 if (!notOnServer) {
                     // Photo exists on server, keep it
                     console.log(`✓ Keeping synced photo: ${p.filename}`);
+                    return false;
+                }
+
+                // CRITICAL FIX: Never delete photos with 'synced' status
+                // These were uploaded via ZIP and won't appear as individual files
+                if (p.status === 'synced') {
+                    console.log(`✓ Keeping synced (ZIP uploaded) photo: ${p.filename}`);
                     return false;
                 }
 

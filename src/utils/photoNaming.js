@@ -1,13 +1,19 @@
 // Photo naming utility
-// Format: {SiteName} {SiteID} {PhotoName} {Sequential}
-// Example: NE-FRANKLIN 435 Overall Compound 1.1
+// Format: {SiteName} {SiteID} {PhotoName} {Sequential}_{Timestamp}
+// Example: NE-FRANKLIN 435 Overall Compound 1.1_143052
+// The timestamp ensures uniqueness even if sequential numbers collide
 
 export function generatePhotoName(siteName, siteId, photoReqName, sequentialNumber, subNumber = 1) {
     const cleanSiteName = siteName.trim();
     const cleanPhotoName = photoReqName.trim();
     const decimal = `${sequentialNumber}.${subNumber}`;
 
-    return `${cleanSiteName} ${siteId} ${cleanPhotoName} ${decimal}`;
+    // Add timestamp suffix (HHMMSS) to ensure uniqueness across sessions
+    // This prevents filename collisions when taking additional photos after previous uploads
+    const now = new Date();
+    const timestamp = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+
+    return `${cleanSiteName} ${siteId} ${cleanPhotoName} ${decimal}_${timestamp}`;
 }
 
 export function parsePhotoName(filename) {
