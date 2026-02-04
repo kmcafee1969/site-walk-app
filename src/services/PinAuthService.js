@@ -70,16 +70,7 @@ class PinAuthService {
      * @returns {Promise<{success: boolean, error?: string, user?: object}>}
      */
     async login(username, pin) {
-        // Debug logging
-        console.log('=== LOGIN DEBUG ===');
-        console.log('Supabase URL:', supabaseUrl);
-        console.log('Supabase client exists:', !!supabase);
-        console.log('APP_ID:', APP_ID);
-        console.log('Username:', username);
-        console.log('PIN length:', pin?.length);
-
         if (!supabase) {
-            console.error('Supabase client is null - check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
             return {
                 success: false,
                 error: 'Database connection not configured. Contact administrator.'
@@ -87,7 +78,6 @@ class PinAuthService {
         }
 
         if (!APP_ID) {
-            console.error('APP_ID is not set - check VITE_APP_ID');
             return {
                 success: false,
                 error: 'App not configured. Contact administrator.'
@@ -95,7 +85,6 @@ class PinAuthService {
         }
 
         try {
-            console.log('Executing Supabase query...');
             const { data, error } = await supabase
                 .from('app_users')
                 .select('*')
@@ -105,21 +94,16 @@ class PinAuthService {
                 .eq('is_active', true)
                 .single();
 
-            console.log('Query result - data:', data);
-            console.log('Query result - error:', error);
-
             if (error && error.code !== 'PGRST116') {
                 console.error('Login error:', error);
                 return { success: false, error: 'Login failed. Please try again.' };
             }
 
             if (!data) {
-                console.log('No user found matching criteria');
                 return { success: false, error: 'Invalid username or PIN.' };
             }
 
             // Successful login
-            console.log('Login successful for user:', data.username);
             localStorage.setItem(USER_AUTH_KEY, 'true');
             localStorage.setItem(USER_DATA_KEY, JSON.stringify({
                 id: data.id,
@@ -131,7 +115,7 @@ class PinAuthService {
             return { success: true, user: data };
 
         } catch (err) {
-            console.error('Login exception:', err);
+            console.error('Login error:', err);
             return { success: false, error: 'Network error. Please check your connection.' };
         }
     }
