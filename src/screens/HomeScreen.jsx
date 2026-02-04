@@ -299,7 +299,7 @@ function HomeScreen({ sites, onRefresh }) {
                 borderTop: '1px solid #eee',
                 marginTop: '20px'
             }}>
-                App Version: v2.5.0-20250108-1630
+                App Version: v2.1.0 | Build: 2026-02-04
             </div>
         </div>
     );
