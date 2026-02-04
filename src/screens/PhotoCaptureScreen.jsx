@@ -6,6 +6,19 @@ import { generatePhotoName, getNextSequentialNumber } from '../utils/photoNaming
 import { sharepointConfig } from '../config/sharepoint.config';
 import SharePointService from '../services/SharePointService';
 
+// Version info for debugging
+export const APP_VERSION = '2.1.0';
+export const APP_BUILD_DATE = '2026-02-04';
+
+// Unique ID counter to ensure no collisions even with rapid captures
+let photoIdCounter = 0;
+const generateUniquePhotoId = () => {
+    photoIdCounter++;
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substr(2, 9);
+    return `${timestamp}-${photoIdCounter}-${random}`;
+};
+
 function PhotoCaptureScreen() {
     const { siteId, photoReqId } = useParams();
     const navigate = useNavigate();
@@ -522,7 +535,7 @@ function PhotoCaptureScreen() {
             console.log('Generated filename:', filename);
 
             // Create photo data
-            const uniqueId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            const uniqueId = crypto.randomUUID ? crypto.randomUUID() : generateUniquePhotoId();
 
             const photoData = {
                 id: uniqueId,
@@ -732,7 +745,7 @@ function PhotoCaptureScreen() {
                 );
 
                 // Create photo data
-                const uniqueId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                const uniqueId = crypto.randomUUID ? crypto.randomUUID() : generateUniquePhotoId();
 
                 const photoData = {
                     id: uniqueId,

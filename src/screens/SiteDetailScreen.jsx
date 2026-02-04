@@ -763,7 +763,10 @@ function SiteDetailScreen() {
 
             {/* Debug Console */}
             <div style={{ padding: '10px', backgroundColor: '#f5f5f5', borderTop: '1px solid #ccc', maxHeight: '150px', overflowY: 'auto', fontSize: '10px' }}>
-                <strong>Debug Console:</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <strong>Debug Console:</strong>
+                    <span style={{ color: '#666' }}>v2.1.0 | Build: 2026-02-04</span>
+                </div>
                 {logs.map((log, i) => <div key={i}>{log}</div>)}
             </div>
         </div >
