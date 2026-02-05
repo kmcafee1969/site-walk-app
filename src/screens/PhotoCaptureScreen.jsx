@@ -283,6 +283,8 @@ function PhotoCaptureScreen() {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: 'environment', // Use back camera on mobile
+                    width: { ideal: 4096 },
+                    height: { ideal: 2160 },
                     zoom: true // Hint to browser we want zoom
                 },
                 audio: false
@@ -657,7 +659,8 @@ function PhotoCaptureScreen() {
     };
 
     // Compress image using canvas (reduces file size significantly)
-    const compressImage = (file, maxWidth = 1920, quality = 0.8) => {
+    // Updated defaults to 2560px / 0.9 quality for higher resolution requirements
+    const compressImage = (file, maxWidth = 2560, quality = 0.9) => {
         return new Promise((resolve, reject) => {
             const img = new Image();
             const url = URL.createObjectURL(file);
