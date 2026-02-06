@@ -36,6 +36,13 @@ class SharePointService {
             const fuzzy = children.find(c => c.name.toLowerCase() === lowerTarget);
             if (fuzzy) return fuzzy.name;
 
+            // Try aggressive fuzzy match (ignore separators like - _ and space)
+            // Example: "KS-Sharon Springs" matches "KS_SHARON_SPRINGS"
+            const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const normalizedTarget = normalize(targetName);
+            const aggressiveFuzzy = children.find(c => normalize(c.name) === normalizedTarget);
+            if (aggressiveFuzzy) return aggressiveFuzzy.name;
+
             // Try containing match (for Phase folders e.g. "Phase 11" matches "Telamon Site Walks - Phase 11")
             if (targetName.includes('Phase')) {
                 const phaseNum = targetName.replace(/[^0-9]/g, '');
