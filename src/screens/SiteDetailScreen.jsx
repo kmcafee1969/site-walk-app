@@ -349,6 +349,7 @@ function SiteDetailScreen() {
                         .replace(/^_+|_+$/g, '');     // Trim leading/trailing underscores
 
                     const baseFilename = `${sanitizedCategory}.zip`;
+                    let categoryFilesAdded = 0; // Track actual files added
 
                     setUploadProgress({
                         current: categoryIndex,
@@ -359,16 +360,35 @@ function SiteDetailScreen() {
                     try {
                         // Create ZIP for this category
                         const zip = new JSZip();
+                        let hasFiles = false;
 
                         for (const photo of categoryPhotos) {
                             let blobToAdd = photo.blob;
-                            if (!blobToAdd && photo.dataUrl) {
-                                const res = await fetch(photo.dataUrl);
-                                blobToAdd = await res.blob();
+                            try {
+                                if (!blobToAdd && photo.dataUrl) {
+                                    // Try to recover from dataUrl
+                                    const res = await fetch(photo.dataUrl);
+                                    blobToAdd = await res.blob();
+                                }
+                            } catch (err) {
+                                console.warn(`Failed to recover blob for ${photo.filename}`, err);
                             }
+
                             if (blobToAdd) {
                                 zip.file(photo.filename, blobToAdd);
+                                categoryFilesAdded++;
+                                hasFiles = true;
+                            } else {
+                                console.error(`Photo corrupted (no blob/dataUrl): ${photo.filename}`);
+                                errors.push(`Corrupted: ${photo.filename}`);
+                                failCount++; // Count as failure
                             }
+                        }
+
+                        if (!hasFiles) {
+                            console.warn(`Skipping empty zip for ${category}`);
+                            categoryIndex++;
+                            continue; // Skip upload if no files
                         }
 
                         const zipBlob = await zip.generateAsync({ type: "blob" });
@@ -398,18 +418,27 @@ function SiteDetailScreen() {
                         );
 
                         // Mark photos in this category as synced
+                        // ONLY mark the ones that were actually added!
                         for (const photo of categoryPhotos) {
-                            await StorageService.updatePhotoStatus(photo.id, 'synced');
+                            const blobExists = photo.blob || photo.dataUrl;
+                            if (blobExists) {
+                                await StorageService.updatePhotoStatus(photo.id, 'synced');
+                            }
                         }
 
-                        uploadedFiles.push(`${finalFilename} (${categoryPhotos.length} photos, ${zipSizeMB} MB)`);
-                        successCount += categoryPhotos.length;
+                        uploadedFiles.push(`${finalFilename} (${categoryFilesAdded} photos, ${zipSizeMB} MB)`);
+                        successCount += categoryFilesAdded;
                         appendLog(`✓ Uploaded: ${finalFilename}`);
 
                     } catch (catError) {
                         console.error(`Error uploading category ${category}:`, catError);
                         errors.push(`${category}: ${catError.message}`);
-                        failCount += categoryPhotos.length;
+                        // If category failed, all its photos failed (excluding ones already counted as corrupted)
+                        // But wait, failCount handles individual corruption.
+                        // If uploadZip fails, ALL `categoryFilesAdded` are now failures.
+                        // So subtract them from success? No, simply don't add them.
+                        // But we need to increment failCount for the ones that WERE added to zip but failed upload.
+                        failCount += categoryFilesAdded;
                     }
 
                     categoryIndex++;
@@ -419,6 +448,15 @@ function SiteDetailScreen() {
                 // FALLBACK: Offline Queue (Individual items)
                 for (let i = 0; i < pendingPhotos.length; i++) {
                     const photo = pendingPhotos[i];
+                    // Skip corrupted photos in offline queue too?
+                    // Or queue them and let SyncService deal with it?
+                    // Better to fail fast if we know it's broken.
+                    if (!photo.blob && !photo.dataUrl) {
+                        errors.push(`Corrupted: ${photo.filename}`);
+                        failCount++;
+                        continue;
+                    }
+
                     // Offline: Add to queue
                     console.log(`Queueing photo ${i + 1}/${pendingPhotos.length}: ${photo.filename}`);
                     await SyncService.addToQueue('PHOTO', {
