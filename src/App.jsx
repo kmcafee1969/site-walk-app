@@ -77,6 +77,18 @@ function App() {
     };
 
     useEffect(() => {
+        // MIGRATION: Force logout if we have auth but no session key (first run after update)
+        // This ensures the user sees the login screen and starts a fresh 3-hour timer.
+        const hasAuth = localStorage.getItem('rmr_cop_user_auth');
+        const hasSession = localStorage.getItem('rmr_cop_last_active');
+
+        if (hasAuth === 'true' && !hasSession) {
+            console.log('Migration: New session policy detected. Forcing one-time logout.');
+            localStorage.removeItem('rmr_cop_user_auth');
+            setIsPinAuthenticated(false);
+            return; // Stop here, effect will re-run with false
+        }
+
         // Initialize Session Service
         if (isPinAuthenticated) {
             SessionService.init(handleLogout);
