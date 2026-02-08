@@ -253,6 +253,8 @@ function PhotoCaptureScreen() {
         };
     }, []);
 
+    const imageCaptureRef = useRef(null); // Reference for ImageCapture API
+
     // Camera cleanup on unmount - critical for memory management
     useEffect(() => {
         return () => {
@@ -293,8 +295,19 @@ function PhotoCaptureScreen() {
             // Store stream reference first
             streamRef.current = stream;
 
-            // Check for Zoom Capability
             const track = stream.getVideoTracks()[0];
+
+            // Initialize ImageCapture if supported
+            if ('ImageCapture' in window) {
+                try {
+                    imageCaptureRef.current = new ImageCapture(track);
+                    console.log('ImageCapture API initialized');
+                } catch (err) {
+                    console.warn('ImageCapture initialization failed:', err);
+                }
+            }
+
+            // Check for Zoom Capability
             const capabilities = track.getCapabilities ? track.getCapabilities() : {};
 
             if ('zoom' in capabilities) {
@@ -344,6 +357,7 @@ function PhotoCaptureScreen() {
         }
         setShowCamera(false);
         setSupportsZoom(false); // Reset zoom state
+        imageCaptureRef.current = null;
     };
 
     const handleZoom = async (event) => {
@@ -405,175 +419,205 @@ function PhotoCaptureScreen() {
 
     const capturePhoto = useCallback(async () => {
         if (!videoRef.current || !site || !photoReq) {
-            console.error('Missing data for capture:', {
-                video: !!videoRef.current,
-                site: !!site,
-                photoReq: !!photoReq
-            });
             alert('Error: Missing required data. Please go back and try again.');
-            return;
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = videoRef.current.videoWidth;
-        canvas.height = videoRef.current.videoHeight;
-
-        console.log('Canvas size:', canvas.width, 'x', canvas.height);
-
-        if (canvas.width === 0 || canvas.height === 0) {
-            console.error('Video dimensions are zero');
-            alert('Error: Camera not ready. Please wait for the video to load.');
             return;
         }
 
         // Play shutter sound immediately
         playShutterSound();
 
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(videoRef.current, 0, 0);
-
-        // Add timestamp overlay in bottom right corner
         try {
-            const now = new Date();
-            const dateStr = now.toLocaleString('en-US', {
-                month: '2-digit',
-                day: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true
+            let photoBlob;
+            let width, height;
+
+            // 1. CAPTURE IMAGE
+            if (imageCaptureRef.current) {
+                try {
+                    console.log('Using ImageCapture API for high-res photo...');
+                    photoBlob = await imageCaptureRef.current.takePhoto();
+                    // Load into image to get dimensions
+                    const bitmap = await createImageBitmap(photoBlob);
+                    width = bitmap.width;
+                    height = bitmap.height;
+                    bitmap.close();
+                    console.log(`ImageCapture success: ${width}x${height}`);
+                } catch (err) {
+                    console.warn('ImageCapture failed, falling back to video stream:', err);
+                }
+            }
+
+            // Fallback: Capture from Video Stream
+            if (!photoBlob) {
+                console.log('Using Video Stream Fallback...');
+                width = videoRef.current.videoWidth;
+                height = videoRef.current.videoHeight;
+                if (width === 0 || height === 0) throw new Error('Video dimensions are zero');
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(videoRef.current, 0, 0);
+                photoBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+            }
+
+            // 2. PROCESS IMAGE (Add Overlays)
+            // We need to draw the blob onto a canvas to add overlays
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                img.src = URL.createObjectURL(photoBlob);
             });
 
-            // Get location string from REF (guaranteed fresh)
-            let locationStr = 'Location: Not Available';
-            const loc = locationRef.current; // Use Ref!
+            // Parse dimensions explicitly from the loaded image
+            canvas.width = img.width;
+            canvas.height = img.height;
 
-            if (loc) {
-                const latDir = loc.latitude >= 0 ? 'N' : 'S';
-                const lonDir = loc.longitude >= 0 ? 'E' : 'W';
-                locationStr = `Location: ${Math.abs(loc.latitude).toFixed(6)}° ${latDir}, ${Math.abs(loc.longitude).toFixed(6)}° ${lonDir}`;
-            } else {
-                console.warn('GPS location missing from ref at capture time');
-            }
+            // Draw original image
+            ctx.drawImage(img, 0, 0);
+            URL.revokeObjectURL(img.src); // Cleanup
 
-            // Prepare text lines
-            const lines = [
-                `Site: ${site.name} (${site.id})`,
-                locationStr
-            ];
-
-            // Add heading if available
-            const hdg = headingRef.current;
-            if (hdg !== null) {
-                // Convert heading to cardinal direction
-                const cardinalDirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-                const index = Math.round(hdg / 45) % 8;
-                const cardinal = cardinalDirs[index];
-                lines.push(`Heading: ${hdg}° ${cardinal}`);
-            }
-
-            lines.push(`Date: ${dateStr}`);
-
-            // Text styling
-            const fontSize = Math.max(16, Math.floor(canvas.height / 40)); // Responsive font size
-            ctx.font = `${fontSize}px Arial`;
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'bottom';
-
-            // Measure text to create background
-            const lineHeight = fontSize * 1.3;
-            const padding = fontSize * 0.5;
-            const maxWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
-            const bgWidth = maxWidth + (padding * 2);
-            const bgHeight = (lines.length * lineHeight) + (padding * 2);
-
-            // Draw semi-transparent black background
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-            ctx.fillRect(
-                canvas.width - bgWidth - 10,
-                canvas.height - bgHeight - 10,
-                bgWidth,
-                bgHeight
-            );
-
-            // Draw text lines
-            ctx.fillStyle = 'white';
-            lines.forEach((line, index) => {
-                ctx.fillText(
-                    line,
-                    canvas.width - padding - 10,
-                    canvas.height - padding - 10 - ((lines.length - 1 - index) * lineHeight)
-                );
-            });
-
-            console.log('Timestamp overlay added:', lines);
-        } catch (overlayError) {
-            console.error('Failed to add timestamp overlay:', overlayError);
-            // Continue without overlay - don't block photo capture
-        }
-
-        // Convert to blob
-        canvas.toBlob(async (blob) => {
-            if (!blob) {
-                console.error('Failed to create blob from canvas');
-                alert('Error: Failed to capture photo. Please try again.');
-                return;
-            }
-
-            console.log('Blob created, size:', blob.size);
-
-            // Generate photo name
-            const photoReqName = photoReq.name || `Photo ${photoReq.id}`;
-            const nextNum = getNextSequentialNumber(photosRef.current, photoReqName);
-            const filename = generatePhotoName(
-                site.name,
-                site.id,
-                photoReqName,
-                nextNum.sequential,
-                nextNum.sub
-            );
-
-            console.log('Generated filename:', filename);
-
-            // Create photo data
-            const uniqueId = crypto.randomUUID ? crypto.randomUUID() : generateUniquePhotoId();
-
-            const photoData = {
-                id: uniqueId,
-                photoReqId: photoReq.id,
-                photoReqName: photoReqName,
-                filename: filename + '.jpg',
-                blob: blob,
-                dataUrl: canvas.toDataURL('image/jpeg', 0.9), // Restored for UI display
-                size: blob.size,
-                width: canvas.width,
-                height: canvas.height,
-                capturedAt: new Date().toISOString(),
-                status: 'pending' // Mark as pending so it is not deleted by reconciliation
-            };
-
-            console.log('Saving photo data:', { id: photoData.id, filename: photoData.filename, size: photoData.size });
-
-            // Optimistically update Ref and State immediately
-            const newPhotos = [...photosRef.current, photoData];
-            photosRef.current = newPhotos;
-            setCapturedPhotos(newPhotos);
-
+            // Add timestamp overlay in bottom right corner
             try {
-                // Save to IndexedDB
-                await StorageService.savePhoto(site.id, photoData);
-                console.log('Photo saved successfully to IndexedDB');
-            } catch (error) {
-                console.error('Error saving photo:', error);
-                alert('Failed to save photo. Please try again.');
+                const now = new Date();
+                const dateStr = now.toLocaleString('en-US', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true
+                });
 
-                // Rollback
-                photosRef.current = photosRef.current.filter(p => p.id !== photoData.id);
-                setCapturedPhotos(photosRef.current);
+                // Get location string from REF (guaranteed fresh)
+                let locationStr = 'Location: Not Available';
+                const loc = locationRef.current; // Use Ref!
+
+                if (loc) {
+                    const latDir = loc.latitude >= 0 ? 'N' : 'S';
+                    const lonDir = loc.longitude >= 0 ? 'E' : 'W';
+                    locationStr = `Location: ${Math.abs(loc.latitude).toFixed(6)}° ${latDir}, ${Math.abs(loc.longitude).toFixed(6)}° ${lonDir}`;
+                }
+
+                // Prepare text lines
+                const lines = [
+                    `Site: ${site.name} (${site.id})`,
+                    locationStr
+                ];
+
+                // Add heading if available
+                const hdg = headingRef.current;
+                if (hdg !== null) {
+                    // Convert heading to cardinal direction
+                    const cardinalDirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+                    const index = Math.round(hdg / 45) % 8;
+                    const cardinal = cardinalDirs[index];
+                    lines.push(`Heading: ${hdg}° ${cardinal}`);
+                }
+
+                lines.push(`Date: ${dateStr}`);
+
+                // Text styling - Scale relative to image width
+                const fontSize = Math.max(24, Math.floor(canvas.width / 40));
+                ctx.font = `${fontSize}px Arial`;
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'bottom';
+
+                // Measure text to create background
+                const lineHeight = fontSize * 1.3;
+                const padding = fontSize * 0.5;
+                const maxWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
+                const bgWidth = maxWidth + (padding * 2);
+                const bgHeight = (lines.length * lineHeight) + (padding * 2);
+
+                // Draw semi-transparent black background
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.fillRect(
+                    canvas.width - bgWidth - 10,
+                    canvas.height - bgHeight - 10,
+                    bgWidth,
+                    bgHeight
+                );
+
+                // Draw text lines
+                ctx.fillStyle = 'white';
+                lines.forEach((line, index) => {
+                    ctx.fillText(
+                        line,
+                        canvas.width - padding - 10,
+                        canvas.height - padding - 10 - ((lines.length - 1 - index) * lineHeight)
+                    );
+                });
+
+                console.log('Timestamp overlay added to high-res image');
+            } catch (overlayError) {
+                console.error('Failed to add timestamp overlay:', overlayError);
             }
-        }, 'image/jpeg', 0.9);
-    }, [site, photoReq, siteId, location]);
+
+            // Convert back to blob with high quality
+            canvas.toBlob(async (finalBlob) => {
+                if (!finalBlob) throw new Error('Failed to encode final image');
+
+                // Generate photo name
+                const photoReqName = photoReq.name || `Photo ${photoReq.id}`;
+                const nextNum = getNextSequentialNumber(photosRef.current, photoReqName);
+                const filename = generatePhotoName(
+                    site.name,
+                    site.id,
+                    photoReqName,
+                    nextNum.sequential,
+                    nextNum.sub
+                );
+
+                // Create photo data
+                const uniqueId = crypto.randomUUID ? crypto.randomUUID() : generateUniquePhotoId();
+                const photoData = {
+                    id: uniqueId,
+                    photoReqId: photoReq.id,
+                    photoReqName: photoReqName,
+                    filename: filename + '.jpg',
+                    blob: finalBlob,
+                    dataUrl: canvas.toDataURL('image/jpeg', 0.8), // Lower quality for thumbnail preview only
+                    size: finalBlob.size,
+                    width: canvas.width,
+                    height: canvas.height,
+                    capturedAt: new Date().toISOString(),
+                    status: 'pending'
+                };
+
+                console.log('Saving photo data:', {
+                    id: photoData.id,
+                    filename: photoData.filename,
+                    size: (photoData.size / 1024 / 1024).toFixed(2) + ' MB',
+                    res: `${photoData.width}x${photoData.height}`
+                });
+
+                // Optimistically update Ref and State
+                const newPhotos = [...photosRef.current, photoData];
+                photosRef.current = newPhotos;
+                setCapturedPhotos(newPhotos);
+
+                try {
+                    await StorageService.savePhoto(site.id, photoData);
+                } catch (error) {
+                    console.error('Error saving photo:', error);
+                    alert('Failed to save photo. Local storage may be full.');
+                    // Rollback
+                    photosRef.current = photosRef.current.filter(p => p.id !== photoData.id);
+                    setCapturedPhotos(photosRef.current);
+                }
+            }, 'image/jpeg', 0.95); // High quality final save
+
+        } catch (error) {
+            console.error('Capture failed:', error);
+            alert('Failed to take photo: ' + error.message);
+        }
+    }, [site, photoReq, siteId]); // dependencies
 
     const confirmDelete = async (photoId) => {
         try {
@@ -659,8 +703,8 @@ function PhotoCaptureScreen() {
     };
 
     // Compress image using canvas (reduces file size significantly)
-    // Updated defaults to 2560px / 0.9 quality for higher resolution requirements
-    const compressImage = (file, maxWidth = 2560, quality = 0.9) => {
+    // Updated defaults to 4096px / 0.95 quality for native-like resolution
+    const compressImage = (file, maxWidth = 4096, quality = 0.95) => {
         return new Promise((resolve, reject) => {
             const img = new Image();
             const url = URL.createObjectURL(file);
