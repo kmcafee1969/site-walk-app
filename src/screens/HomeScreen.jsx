@@ -102,16 +102,37 @@ function HomeScreen({ sites, onRefresh, onLogout }) {
 
     return (
         <div className="screen">
-            <header className="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-10 flex justify-between items-center">
-                <h1 className="text-xl font-bold">Site Walks</h1>
+            <header
+                style={{
+                    backgroundColor: '#1976d2',
+                    color: 'white',
+                    padding: '16px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 10,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                }}
+            >
+                <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>Site Walks</h1>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <button
                         onClick={onRefresh}
-                        className="p-2"
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'white',
+                            cursor: 'pointer',
+                            padding: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
                         aria-label="Refresh Data"
-                        style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer' }}
                     >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg style={{ width: '24px', height: '24px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
                     </button>
@@ -121,11 +142,19 @@ function HomeScreen({ sites, onRefresh, onLogout }) {
                                 onLogout();
                             }
                         }}
-                        className="p-2"
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'white',
+                            cursor: 'pointer',
+                            padding: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
                         aria-label="Logout"
-                        style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer' }}
                     >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg style={{ width: '24px', height: '24px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                         </svg>
                     </button>
@@ -320,7 +349,7 @@ function HomeScreen({ sites, onRefresh, onLogout }) {
                 borderTop: '1px solid #eee',
                 marginTop: '20px'
             }}>
-                App Version: v2.6.0 | Build: 2026-02-07
+                App Version: v2.6.1 | Build: 2026-02-07
             </div>
         </div>
     );

@@ -14,7 +14,8 @@ import { SyncService } from './services/SyncService';
 
 // Version for deployment debugging
 // Version for deployment debugging
-const APP_VERSION = 'v2.6.0-20260207-1930';
+// Version for deployment debugging
+const APP_VERSION = 'v2.6.1-20260207-1945';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
@@ -78,16 +79,21 @@ function App() {
     };
 
     useEffect(() => {
-        // MIGRATION: Force logout if we have auth but no session key (first run after update)
-        // This ensures the user sees the login screen and starts a fresh 3-hour timer.
-        const hasAuth = localStorage.getItem('rmr_cop_user_auth');
-        const hasSession = localStorage.getItem('rmr_cop_last_active');
+        // MIGRATION: Force logout for v2.6.1 update to ensure session policy is active
+        // using a specific key to guarantee it runs exactly once per device per update
+        const MIGRATION_KEY = 'rmr_cop_migration_v261';
+        const hasMigrated = localStorage.getItem(MIGRATION_KEY);
 
-        if (hasAuth === 'true' && !hasSession) {
-            console.log('Migration: New session policy detected. Forcing one-time logout.');
+        if (!hasMigrated) {
+            console.log('Migration: v2.6.1 update. Forcing one-time logout.');
+            localStorage.setItem(MIGRATION_KEY, 'true');
+            // Clear auth to force login
             localStorage.removeItem('rmr_cop_user_auth');
+            // Also clear legacy session if exists
+            localStorage.removeItem('rmr_cop_last_active');
+
             setIsPinAuthenticated(false);
-            return; // Stop here, effect will re-run with false
+            return; // Stop here
         }
 
         // Initialize Session Service
