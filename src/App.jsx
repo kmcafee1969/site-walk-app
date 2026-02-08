@@ -62,17 +62,42 @@ class ErrorBoundary extends React.Component {
 
 import PinAuthService from './services/PinAuthService';
 import PinLoginScreen from './screens/PinLoginScreen';
+import SessionService from './services/SessionService'; // Import SessionService
 
 function App() {
-    const [isPinAuthenticated, setIsPinAuthenticated] = useState(PinAuthService.isAuthenticated());
+    const [isPinAuthenticated, setIsPinAuthenticated] = useState(PinAuthService.isAuthenticated()); // Initialize with current auth state
     const [isLoading, setIsLoading] = useState(true);
     const [sites, setSites] = useState([]);
     const [error, setError] = useState(null);
 
+    const handleLogout = () => {
+        PinAuthService.logout();
+        setIsPinAuthenticated(false);
+        SessionService.stopMonitoring(); // Stop monitoring on logout
+    };
+
     useEffect(() => {
+        // Initialize Session Service
+        if (isPinAuthenticated) {
+            SessionService.init(handleLogout);
+        }
+
         initializeApp();
         // Initialize background sync service
         SyncService.init();
+
+        // Check session on visibility change (for when app comes back from background)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && isPinAuthenticated) {
+                SessionService.checkSession();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [isPinAuthenticated]);
 
     const initializeApp = async () => {
@@ -136,6 +161,7 @@ function App() {
 
     const handlePinSuccess = () => {
         setIsPinAuthenticated(true);
+        SessionService.init(handleLogout); // Start session monitoring on login
     };
 
     const handleDataLoaded = async (loadedSites) => {
@@ -225,6 +251,7 @@ function App() {
                                 <HomeScreen
                                     sites={sites}
                                     onRefresh={handleRefresh}
+                                    onLogout={handleLogout} // Pass logout handler
                                 />
                             }
                         />
