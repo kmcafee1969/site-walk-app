@@ -336,115 +336,93 @@ function SiteDetailScreen() {
                     total: totalCategories,
                     status: `Preparing ${totalCategories} categories...`
                 });
-
                 // Process each category SEQUENTIALLY to keep memory usage low
                 for (const category of categories) {
                     // 1. Get IDs for this category
                     const categoryMeta = metaByCategory[category];
-                    const categoryIds = categoryMeta.map(p => p.id);
+                    // Sort by time/name to be nice?
 
-                    setUploadProgress({
-                        current: categoryIndex,
-                        total: totalCategories,
-                        status: `Loading photos for "${category}"...`
-                    });
-
-                    // 2. Fetch FULL blobs for JUST this category
-                    // This is the key fix: we only hold ~5-10 photos in memory at a time, not 100
-                    const categoryPhotos = await StorageService.getPhotosByIds(categoryIds);
-
-                    // Sanitize category name for filename
                     const sanitizedCategory = category
                         .toLowerCase()
                         .replace(/[^a-z0-9]+/g, '_')
                         .replace(/^_+|_+$/g, '');
 
-                    const baseFilename = `${sanitizedCategory}.zip`;
-                    let categoryFilesAdded = 0;
-
                     setUploadProgress({
-                        current: categoryIndex,
-                        total: totalCategories,
-                        status: `Zipping "${category}"...`
+                        current: successCount + failCount, // Per category progress? Or global? 
+                        // Let's stick to global or category-based. 
+                        // Resetting current here might be confusing if global total is huge.
+                        // Let's calculate global progress from the outside.
+                        total: pendingMeta.length,
+                        status: `Processing "${category}"...`
                     });
 
-                    try {
-                        // Create ZIP for this category
-                        const zip = new JSZip();
-                        let hasFiles = false;
+                    // Iterate IDs one by one
+                    for (let i = 0; i < categoryMeta.length; i++) {
+                        const meta = categoryMeta[i];
 
-                        for (const photo of categoryPhotos) {
-                            let blobToAdd = photo.blob;
+                        // Update Global Progress
+                        // We need a global counter?
+                        // Let's just user categoryIndex for now?
+                        // Better: calculate total uploaded so far
+                        const currentGlobal = successCount + failCount + 1;
 
-                            // Recovery logic
-                            try {
-                                if (!blobToAdd && photo.dataUrl) {
-                                    const res = await fetch(photo.dataUrl);
-                                    blobToAdd = await res.blob();
-                                }
-                            } catch (err) {
-                                console.warn(`Failed to recover blob for ${photo.filename}`, err);
-                            }
-
-                            if (blobToAdd) {
-                                zip.file(photo.filename, blobToAdd);
-                                categoryFilesAdded++;
-                                hasFiles = true;
-                            } else {
-                                console.error(`Photo corrupted: ${photo.filename}`);
-                                errors.push(`Corrupted: ${photo.filename}`);
-                                failCount++;
-                            }
-                        }
-
-                        if (!hasFiles) {
-                            console.warn(`Skipping empty zip for ${category}`);
-                            categoryIndex++;
-                            continue;
-                        }
-
-                        const zipBlob = await zip.generateAsync({ type: "blob" });
-                        const zipSizeMB = (zipBlob.size / 1024 / 1024).toFixed(2);
-
-                        // Upload
                         setUploadProgress({
-                            current: categoryIndex,
-                            total: totalCategories,
-                            status: `Uploading "${category}" (${zipSizeMB} MB)...`
+                            current: currentGlobal,
+                            total: pendingMeta.length,
+                            status: `Uploading: ${category} / ${meta.filename} ...`
                         });
 
-                        const finalFilename = await SharePointService.getNextAvailableFilename(
-                            site.phase,
-                            site.name,
-                            baseFilename,
-                            'PHOTOS'
-                        );
+                        try {
+                            // Fetch ONE photo
+                            const photo = await StorageService.getPhoto(meta.id);
+                            if (!photo) {
+                                console.warn(`Photo not found: ${meta.id}`);
+                                errors.push(`Missing: ${meta.id}`);
+                                failCount++;
+                                continue;
+                            }
 
-                        await SharePointService.uploadZip(
-                            site.phase,
-                            site.name,
-                            site.id,
-                            finalFilename,
-                            zipBlob
-                        );
+                            let blobToAdd = photo.blob;
+                            // Recovery
+                            if (!blobToAdd && photo.dataUrl) {
+                                try {
+                                    const res = await fetch(photo.dataUrl);
+                                    blobToAdd = await res.blob();
+                                } catch (e) { console.warn("Blob recovery failed", e); }
+                            }
 
-                        // Mark as synced
-                        for (const photo of categoryPhotos) {
-                            await StorageService.updatePhotoStatus(photo.id, 'synced');
+                            if (!blobToAdd) {
+                                console.error(`Photo corrupted: ${meta.filename}`);
+                                errors.push(`Corrupted: ${meta.filename}`);
+                                failCount++;
+                                continue;
+                            }
+
+                            // UPLOAD DIRECTLY (Single File)
+                            // Construct path: Category/Filename.jpg
+                            const relativePath = `${sanitizedCategory}/${meta.filename}`;
+
+                            await SharePointService.uploadPhoto(
+                                site.phase,
+                                site.name,
+                                relativePath,
+                                blobToAdd
+                            );
+
+                            // Mark synced
+                            await StorageService.updatePhotoStatus(meta.id, 'synced');
+                            uploadedFiles.push(relativePath);
+                            successCount++;
+
+                            // FREE MEMORY
+                            blobToAdd = null;
+                            photo.blob = null; // Detach if returned object is reused (it shouldn't be but safety first)
+
+                        } catch (err) {
+                            console.error(`Failed to upload ${meta.filename}:`, err);
+                            errors.push(`${meta.filename}: ${err.message}`);
+                            failCount++;
                         }
-
-                        uploadedFiles.push(`${finalFilename} (${categoryFilesAdded} photos)`);
-                        successCount += categoryFilesAdded;
-
-                        // RELEASE MEMORY
-                        // Explicitly clear variables to help GC
-                        categoryPhotos.length = 0;
-
-                    } catch (catError) {
-                        console.error(`Error uploading category ${category}:`, catError);
-                        errors.push(`${category}: ${catError.message}`);
-                        // Don't count these as strictly 'failed' if they weren't corrupted, 
-                        // they just didn't upload. They remain 'pending'.
                     }
 
                     categoryIndex++;
