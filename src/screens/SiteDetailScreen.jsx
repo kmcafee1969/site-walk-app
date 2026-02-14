@@ -416,7 +416,14 @@ function SiteDetailScreen() {
 
                             // FREE MEMORY
                             blobToAdd = null;
-                            photo.blob = null; // Detach if returned object is reused (it shouldn't be but safety first)
+                            if (photo) {
+                                photo.blob = null;
+                                photo.dataUrl = null;
+                            }
+
+                            // CRITICAL: Force a small delay to allow Garbage Collection
+                            // to clean up the 10MB blob before loading the next one.
+                            await new Promise(resolve => setTimeout(resolve, 500));
 
                         } catch (err) {
                             console.error(`Failed to upload ${meta.filename}:`, err);

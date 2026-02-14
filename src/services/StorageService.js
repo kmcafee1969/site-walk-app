@@ -73,7 +73,13 @@ export const StorageService = {
 
     async getPhoto(id) {
         const db = await this.getDB();
-        return db.get('photos', id);
+        const photo = await db.get('photos', id);
+        if (photo && photo.dataUrl) {
+            // OPTIMIZATION: Free up the massive base64 string immediately
+            // We only need the Blob for upload
+            delete photo.dataUrl;
+        }
+        return photo;
     },
 
     async getPhotos(siteId) {
