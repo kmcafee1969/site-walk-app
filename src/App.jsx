@@ -147,11 +147,13 @@ function App() {
             console.log('Syncing data from Supabase...');
 
             // Use SyncService to fetch from Supabase and save to IDB
-            const sitesSuccess = await SyncService.syncSites();
-            const reqsSuccess = await SyncService.syncRequirements();
-
-            if (!sitesSuccess || !reqsSuccess) {
-                throw new Error('Failed to sync data from Supabase');
+            const sitesResult = await SyncService.syncSites();
+            if (!sitesResult.success) {
+                throw new Error(`Sites sync failed: ${sitesResult.error || 'unknown'}`);
+            }
+            const reqsResult = await SyncService.syncRequirements();
+            if (!reqsResult.success) {
+                throw new Error(`Requirements sync failed: ${reqsResult.error || 'unknown'}`);
             }
 
             // Load from IDB to state

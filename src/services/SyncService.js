@@ -324,30 +324,30 @@ export const SyncService = {
     },
 
     async syncSites() {
-        if (!this.isOnline()) return false;
+        if (!this.isOnline()) return { success: false, error: 'Device is offline' };
         try {
             console.log('Syncing sites from Supabase...');
             const sites = await SupabaseService.getSites();
             await StorageService.saveSites(sites);
             console.log(`Synced ${sites.length} sites from Supabase`);
-            return true;
+            return { success: true };
         } catch (error) {
             console.error('Sync sites error:', error);
-            return false;
+            return { success: false, error: error.message || String(error) };
         }
     },
 
     async syncRequirements() {
-        if (!this.isOnline()) return false;
+        if (!this.isOnline()) return { success: false, error: 'Device is offline' };
         try {
             console.log('Syncing requirements from Supabase...');
             const reqs = await SupabaseService.getPhotoRequirements();
             await StorageService.savePhotoRequirements(reqs);
             console.log(`Synced ${reqs.length} requirements from Supabase`);
-            return true;
+            return { success: true };
         } catch (error) {
             console.error('Sync requirements error:', error);
-            return false;
+            return { success: false, error: error.message || String(error) };
         }
     },
 
