@@ -17,27 +17,23 @@ export const SupabaseService = {
      * Mapped to match the app's internal camelCase format
      */
     async getSites() {
-        // Fetch from 'sites' table
-        // We select specific columns to match the legacy Excel structure
+        // Fetch from 'sites' table - using actual Supabase schema columns
         const { data, error } = await supabase
             .from('sites')
             .select(`
                 id,
-                site_id,
-                phase,
-                site_name,
+                app_id,
+                external_id,
+                name,
                 address,
                 city,
                 state,
                 zip,
                 latitude,
                 longitude,
-                t_mobile_id,
-                nfid,
-                pace_id,
-                project_manager,
-                construction_manager,
-                company
+                phase,
+                status,
+                metadata
             `);
 
         if (error) {
@@ -45,27 +41,29 @@ export const SupabaseService = {
             throw error;
         }
 
-        // Map snake_case to camelCase/Legacy format expected by the app
-        return data.map(site => ({
-            id: site.id, // Supabase UUID
-            siteId: site.site_id, // "CO-ATWOOD"
-            phase: site.phase,
-            name: site.site_name, // "CO-ATWOOD" (redundant but used by app)
-            address: site.address,
-            city: site.city,
-            state: site.state,
-            zip: site.zip,
-            latitude: site.latitude || 0,
-            longitude: site.longitude || 0,
-
-            // Extra fields (optional in app but good to have)
-            tMobileId: site.t_mobile_id,
-            nfid: site.nfid,
-            paceId: site.pace_id,
-            projectManager: site.project_manager,
-            constructionManager: site.construction_manager,
-            company: site.company || 'Telamon'
-        }));
+        // Map to the format expected by the app
+        // Extra fields (t_mobile_id, nfid, etc.) are stored in metadata JSONB
+        return data.map(site => {
+            const meta = site.metadata || {};
+            return {
+                id: site.id,
+                siteId: site.external_id || site.name,
+                phase: site.phase || '',
+                name: site.name,
+                address: site.address || '',
+                city: site.city || '',
+                state: site.state || '',
+                zip: site.zip || '',
+                latitude: site.latitude || 0,
+                longitude: site.longitude || 0,
+                tMobileId: meta.t_mobile_id || '',
+                nfid: meta.nfid || '',
+                paceId: meta.pace_id || '',
+                projectManager: meta.project_manager || '',
+                constructionManager: meta.construction_manager || '',
+                company: meta.company || 'Telamon'
+            };
+        });
     },
 
     /**
@@ -76,14 +74,15 @@ export const SupabaseService = {
             .from('photo_requirements')
             .select(`
                 id,
-                category,
+                app_id,
+                external_id,
+                name,
                 description,
-                min_photos,
-                priority,
-                phase_id,
-                phase_name
+                category,
+                required,
+                sort_order
             `)
-            .order('priority', { ascending: true });
+            .order('sort_order', { ascending: true });
 
         if (error) {
             console.error('Supabase getPhotoRequirements error:', error);
@@ -92,10 +91,12 @@ export const SupabaseService = {
 
         return data.map(req => ({
             id: req.id,
-            name: req.category, // App uses 'name' for category
-            description: req.description,
-            minPhotos: req.min_photos || 0,
-            priority: req.priority || 999
+            name: req.name,
+            description: req.description || '',
+            category: req.category || 'General',
+            required: req.required || false,
+            minPhotos: req.required ? 1 : 0,
+            priority: req.sort_order || 999
         }));
     },
 
