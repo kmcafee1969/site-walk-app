@@ -15,7 +15,7 @@ import { SyncService } from './services/SyncService';
 // Version for deployment debugging
 // Version for deployment debugging
 // Version for deployment debugging
-const APP_VERSION = 'v2.6.4-20260213-2105';
+const APP_VERSION = 'v2.6.1-20260207-1945';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {

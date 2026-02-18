@@ -703,8 +703,8 @@ function PhotoCaptureScreen() {
     };
 
     // Compress image using canvas (reduces file size significantly)
-    // Updated defaults to 3072px / 0.85 quality for memory safety on mobile (High res but not 4K)
-    const compressImage = (file, maxWidth = 3072, quality = 0.85) => {
+    // Updated defaults to 4096px / 0.95 quality for native-like resolution
+    const compressImage = (file, maxWidth = 4096, quality = 0.95) => {
         return new Promise((resolve, reject) => {
             const img = new Image();
             const url = URL.createObjectURL(file);

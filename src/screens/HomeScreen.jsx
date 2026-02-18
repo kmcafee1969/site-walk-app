@@ -349,7 +349,7 @@ function HomeScreen({ sites, onRefresh, onLogout }) {
                 borderTop: '1px solid #eee',
                 marginTop: '20px'
             }}>
-                App Version: v2.6.4 | Build: 2026-02-13
+                App Version: v2.6.1 | Build: 2026-02-07
             </div>
         </div>
     );

@@ -71,66 +71,29 @@ export const StorageService = {
         return photo;
     },
 
-    async getPhoto(id) {
-        const db = await this.getDB();
-        const photo = await db.get('photos', id);
-        if (photo && photo.dataUrl) {
-            // OPTIMIZATION: Free up the massive base64 string immediately
-            // We only need the Blob for upload
-            delete photo.dataUrl;
-        }
-        return photo;
-    },
-
     async getPhotos(siteId) {
-        // PERF WARNING: This loads ALL photos + blobs into memory.
-        // Use getPhotoMetadata + getPhoto(id) for better performance.
         const db = await this.getDB();
         return db.getAllFromIndex('photos', 'siteId', siteId);
     },
 
-    async getPhotosByIds(ids) {
-        const db = await this.getDB();
-        const tx = db.transaction('photos', 'readonly');
-        const store = tx.objectStore('photos');
-
-        const photos = await Promise.all(ids.map(id => store.get(id)));
-        await tx.done;
-        return photos.filter(p => !!p); // Filter out any undefined results
-    },
-
-    // Lightweight metadata-only retrieval (uses cursor to avoid loading all blobs into RAM)
+    // Lightweight metadata-only retrieval (excludes blob/dataUrl to save memory)
     async getPhotoMetadata(siteId) {
         const db = await this.getDB();
-        const tx = db.transaction('photos', 'readonly');
-        const index = tx.objectStore('photos').index('siteId');
-
-        const metadata = [];
-        let cursor = await index.openCursor(IDBKeyRange.only(siteId));
-
-        while (cursor) {
-            const p = cursor.value;
-            metadata.push({
-                id: p.id,
-                photoReqId: p.photoReqId,
-                photoReqName: p.photoReqName,
-                filename: p.filename,
-                status: p.status,
-                capturedAt: p.capturedAt,
-                size: p.size,
-                width: p.width,
-                height: p.height
-                // EXCLUDE: blob, dataUrl
-            });
-            cursor = await cursor.continue();
-        }
-
-        return metadata;
+        const photos = await db.getAllFromIndex('photos', 'siteId', siteId);
+        // Return only metadata, not the memory-heavy blob/dataUrl
+        return photos.map(p => ({
+            id: p.id,
+            photoReqId: p.photoReqId,
+            photoReqName: p.photoReqName,
+            filename: p.filename,
+            status: p.status,
+            capturedAt: p.capturedAt,
+            size: p.size
+        }));
     },
 
     async getAllPhotos() {
         const db = await this.getDB();
-        // WARNING: huge memory usage
         return db.getAll('photos');
     },
 
