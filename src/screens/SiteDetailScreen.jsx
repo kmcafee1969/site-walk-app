@@ -5,7 +5,7 @@ import SharePointService from '../services/SharePointService';
 import EmailService from '../services/EmailService';
 import { sharepointConfig } from '../config/sharepoint.config';
 import { SyncService } from '../services/SyncService';
-import JSZip from 'jszip'; // Import JSZip for bundling
+import { SupabaseService } from '../services/SupabaseService';
 
 function SiteDetailScreen() {
     const { siteId } = useParams();
@@ -290,6 +290,7 @@ function SiteDetailScreen() {
         if (!site) return;
 
         // For upload, we need the full photo data - load it now
+        // This might still be heavy if there are MANY photos, but we process them one by one now
         const allPhotos = await StorageService.getPhotos(siteId);
         const pendingPhotos = allPhotos.filter(p => p.status === 'pending');
 
@@ -306,7 +307,7 @@ function SiteDetailScreen() {
         setUploadProgress({
             current: 0,
             total: pendingPhotos.length,
-            status: isOnline ? 'Starting upload...' : 'Queueing for sync (Offline)...'
+            status: isOnline ? 'Starting Supabase upload...' : 'Queueing for sync (Offline)...'
         });
 
         try {
@@ -315,186 +316,90 @@ function SiteDetailScreen() {
             const errors = [];
             const uploadedFiles = []; // Track uploaded filenames
 
-            // CATEGORY-BASED ZIP OPTIMIZATION
-            if (isOnline) {
-                // Group photos by category (photoReqName contains the category)
-                const photosByCategory = {};
-                for (const photo of pendingPhotos) {
-                    // Use photoReqName as the category key
-                    const category = photo.photoReqName || 'uncategorized';
-                    if (!photosByCategory[category]) {
-                        photosByCategory[category] = [];
-                    }
-                    photosByCategory[category].push(photo);
-                }
-
-                const categories = Object.keys(photosByCategory);
-                const totalCategories = categories.length;
-                let categoryIndex = 0;
+            // Process photos one by one
+            for (let i = 0; i < pendingPhotos.length; i++) {
+                const photo = pendingPhotos[i];
 
                 setUploadProgress({
-                    current: 0,
-                    total: totalCategories,
-                    status: `Creating ${totalCategories} category ZIP files...`
+                    current: i + 1,
+                    total: pendingPhotos.length,
+                    status: `Uploading ${photo.filename}...`
                 });
 
-                // Process each category
-                for (const category of categories) {
-                    const categoryPhotos = photosByCategory[category];
+                try {
+                    // Recover blob if missing (from dataUrl)
+                    if (!photo.blob && photo.dataUrl) {
+                        const res = await fetch(photo.dataUrl);
+                        photo.blob = await res.blob();
+                    }
 
-                    // Sanitize category name for filename
-                    const sanitizedCategory = category
-                        .toLowerCase()
-                        .replace(/[^a-z0-9]+/g, '_')  // Replace non-alphanumeric with underscore
-                        .replace(/^_+|_+$/g, '');     // Trim leading/trailing underscores
+                    if (!photo.blob) {
+                        throw new Error('Photo corrupted (no blob/dataUrl)');
+                    }
 
-                    const baseFilename = `${sanitizedCategory}.zip`;
-                    let categoryFilesAdded = 0; // Track actual files added
-
-                    setUploadProgress({
-                        current: categoryIndex,
-                        total: totalCategories,
-                        status: `Processing "${category}" (${categoryPhotos.length} photos)...`
-                    });
-
-                    try {
-                        // Create ZIP for this category
-                        const zip = new JSZip();
-                        let hasFiles = false;
-
-                        for (const photo of categoryPhotos) {
-                            let blobToAdd = photo.blob;
-                            try {
-                                if (!blobToAdd && photo.dataUrl) {
-                                    // Try to recover from dataUrl
-                                    const res = await fetch(photo.dataUrl);
-                                    blobToAdd = await res.blob();
-                                }
-                            } catch (err) {
-                                console.warn(`Failed to recover blob for ${photo.filename}`, err);
-                            }
-
-                            if (blobToAdd) {
-                                zip.file(photo.filename, blobToAdd);
-                                categoryFilesAdded++;
-                                hasFiles = true;
-                            } else {
-                                console.error(`Photo corrupted (no blob/dataUrl): ${photo.filename}`);
-                                errors.push(`Corrupted: ${photo.filename}`);
-                                failCount++; // Count as failure
-                            }
-                        }
-
-                        if (!hasFiles) {
-                            console.warn(`Skipping empty zip for ${category}`);
-                            categoryIndex++;
-                            continue; // Skip upload if no files
-                        }
-
-                        const zipBlob = await zip.generateAsync({ type: "blob" });
-                        const zipSizeMB = (zipBlob.size / 1024 / 1024).toFixed(2);
-
-                        // Get next available filename (prevents overwriting)
-                        const finalFilename = await SharePointService.getNextAvailableFilename(
-                            site.phase,
-                            site.name,
-                            baseFilename,
-                            'PHOTOS'
-                        );
-
-                        setUploadProgress({
-                            current: categoryIndex,
-                            total: totalCategories,
-                            status: `Uploading "${finalFilename}" (${zipSizeMB} MB)...`
+                    if (isOnline) {
+                        // Upload to Supabase (Buffer)
+                        await SupabaseService.uploadPhoto(photo.blob, {
+                            siteId: site.id,
+                            photoReqId: photo.photoReqId,
+                            filename: photo.filename,
+                            width: photo.width || 0,
+                            height: photo.height || 0,
+                            capturedAt: photo.capturedAt
                         });
 
-                        // Upload the category ZIP
-                        await SharePointService.uploadZip(
-                            site.phase,
-                            site.name,
-                            site.id,
-                            finalFilename,
-                            zipBlob
-                        );
+                        // Mark as synced locally
+                        await StorageService.updatePhotoStatus(photo.id, 'synced');
+                        successCount++;
+                        uploadedFiles.push(photo.filename);
 
-                        // Mark photos in this category as synced
-                        // ONLY mark the ones that were actually added!
-                        for (const photo of categoryPhotos) {
-                            const blobExists = photo.blob || photo.dataUrl;
-                            if (blobExists) {
-                                await StorageService.updatePhotoStatus(photo.id, 'synced');
-                            }
-                        }
-
-                        uploadedFiles.push(`${finalFilename} (${categoryFilesAdded} photos, ${zipSizeMB} MB)`);
-                        successCount += categoryFilesAdded;
-                        appendLog(`✓ Uploaded: ${finalFilename}`);
-
-                    } catch (catError) {
-                        console.error(`Error uploading category ${category}:`, catError);
-                        errors.push(`${category}: ${catError.message}`);
-                        // If category failed, all its photos failed (excluding ones already counted as corrupted)
-                        // But wait, failCount handles individual corruption.
-                        // If uploadZip fails, ALL `categoryFilesAdded` are now failures.
-                        // So subtract them from success? No, simply don't add them.
-                        // But we need to increment failCount for the ones that WERE added to zip but failed upload.
-                        failCount += categoryFilesAdded;
+                    } else {
+                        // Offline: Add to queue
+                        await SyncService.addToQueue('PHOTO', {
+                            siteId: site.id,
+                            photoId: photo.id,
+                            phase: site.phase,
+                            siteName: site.name
+                        });
+                        successCount++; // Count as success (queued)
                     }
 
-                    categoryIndex++;
-                }
-
-            } else {
-                // FALLBACK: Offline Queue (Individual items)
-                for (let i = 0; i < pendingPhotos.length; i++) {
-                    const photo = pendingPhotos[i];
-                    // Skip corrupted photos in offline queue too?
-                    // Or queue them and let SyncService deal with it?
-                    // Better to fail fast if we know it's broken.
-                    if (!photo.blob && !photo.dataUrl) {
-                        errors.push(`Corrupted: ${photo.filename}`);
-                        failCount++;
-                        continue;
-                    }
-
-                    // Offline: Add to queue
-                    console.log(`Queueing photo ${i + 1}/${pendingPhotos.length}: ${photo.filename}`);
-                    await SyncService.addToQueue('PHOTO', {
-                        siteId: site.id,
-                        photoId: photo.id,
-                        phase: site.phase,
-                        siteName: site.name
-                    });
-                    successCount++;
+                } catch (err) {
+                    console.error(`Failed to process ${photo.filename}:`, err);
+                    errors.push(`${photo.filename}: ${err.message}`);
+                    failCount++;
                 }
             }
 
             // Show results
             if (failCount === 0) {
-                if (isOnline) {
-                    const folderPath = `Documents > Telamon - Viaero Site Walks > ${sharepointConfig.sharepoint.normalizePhase(site.phase)} > ${site.name} > PHOTOS`;
+                const statusMsg = isOnline
+                    ? `✅ Success! ${successCount} photos uploaded to Cloud Buffer.`
+                    : `✅ Offline Mode: All ${successCount} photos queued.`;
 
-                    setUploadProgress({
-                        current: 100,
-                        total: 100,
-                        status: `✅ Success! ${successCount} photos uploaded.\n\nFiles created:\n${uploadedFiles.join('\n')}\n\nLocation: ${folderPath}`
-                    });
+                setUploadProgress({
+                    current: pendingPhotos.length,
+                    total: pendingPhotos.length,
+                    status: statusMsg
+                });
 
-                    // Send email notification (Silent)
-                    EmailService.sendUploadNotification(site.name, 'photos', successCount, { folderPath })
-                        .catch(err => console.error('Email notification failed:', err));
-                } else {
-                    setUploadProgress({
-                        current: pendingPhotos.length,
-                        total: pendingPhotos.length,
-                        status: `✅ Offline Mode: All ${successCount} photos queued.\n\nThey will automatically upload when you reconnect to the internet.`
-                    });
-                }
+                // Update local counts immediately
+                const newPendingByReq = { ...localPendingCounts };
+                // Reset counts for synced items? Or just re-fetch?
+                // Simple re-fetch of metadata is safer
+                const updatedMeta = await StorageService.getPhotoMetadata(siteId);
+                const recalcedPending = {};
+                updatedMeta.filter(p => p.status === 'pending').forEach(p => {
+                    const reqId = p.photoReqId.toString();
+                    recalcedPending[reqId] = (recalcedPending[reqId] || 0) + 1;
+                });
+                setLocalPendingCounts(recalcedPending);
+
             } else {
                 setUploadProgress({
                     current: pendingPhotos.length,
                     total: pendingPhotos.length,
-                    status: `⚠️ Partial Success\n\n${successCount} ${isOnline ? 'uploaded' : 'queued'}\n${failCount} failed\n\nErrors:\n${errors.slice(0, 3).join('\n')}`
+                    status: `⚠️ Partial Success\n\n${successCount} done\n${failCount} failed\n\nErrors:\n${errors.slice(0, 3).join('\n')}`
                 });
             }
 

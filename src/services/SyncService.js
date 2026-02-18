@@ -1,5 +1,6 @@
 import { StorageService } from './StorageService';
 import SharePointService from './SharePointService';
+import { SupabaseService } from './SupabaseService';
 
 export const SyncService = {
     isOnline() {
@@ -64,14 +65,17 @@ export const SyncService = {
                 return true; // Remove from queue
             }
 
-            await SharePointService.uploadPhoto(
-                data.phase,
-                data.siteName,
-                photo.filename,
-                photo.blob
-            );
+            // Upload to Supabase (Buffer)
+            await SupabaseService.uploadPhoto(photo.blob, {
+                siteId: data.siteId,
+                photoReqId: photo.photoReqId,
+                filename: photo.filename,
+                width: photo.width || 0,
+                height: photo.height || 0,
+                capturedAt: photo.capturedAt
+            });
 
-            console.log(`Synced photo: ${photo.filename}`);
+            console.log(`Synced photo to Supabase: ${photo.filename}`);
             return true;
         } catch (error) {
             console.error('Sync photo error:', error);
@@ -319,6 +323,111 @@ export const SyncService = {
         }
     },
 
+    async syncSites() {
+        if (!this.isOnline()) return false;
+        try {
+            console.log('Syncing sites from Supabase...');
+            const sites = await SupabaseService.getSites();
+            await StorageService.saveSites(sites);
+            console.log(`Synced ${sites.length} sites from Supabase`);
+            return true;
+        } catch (error) {
+            console.error('Sync sites error:', error);
+            return false;
+        }
+    },
+
+    async syncRequirements() {
+        if (!this.isOnline()) return false;
+        try {
+            console.log('Syncing requirements from Supabase...');
+            const reqs = await SupabaseService.getPhotoRequirements();
+            await StorageService.savePhotoRequirements(reqs);
+            console.log(`Synced ${reqs.length} requirements from Supabase`);
+            return true;
+        } catch (error) {
+            console.error('Sync requirements error:', error);
+            return false;
+        }
+    },
+
+    async syncSupabaseToSharePoint(onProgress) {
+        try {
+            console.log('Fetching pending photos from Supabase...');
+            const pendingPhotos = await SupabaseService.getPendingPhotos();
+
+            if (!pendingPhotos || pendingPhotos.length === 0) {
+                return { success: 0, failed: 0, total: 0 };
+            }
+
+            console.log(`Found ${pendingPhotos.length} pending photos.`);
+            let successCount = 0;
+            let failCount = 0;
+
+            // Fetch sites and requirements once for lookup
+            const sites = await SupabaseService.getSites();
+            const reqs = await SupabaseService.getPhotoRequirements();
+
+            for (let i = 0; i < pendingPhotos.length; i++) {
+                const photo = pendingPhotos[i];
+                if (onProgress) onProgress(i + 1, pendingPhotos.length, photo.filename);
+
+                try {
+                    // 1. Download from Supabase
+                    const blob = await SupabaseService.downloadPhoto(photo.storage_path);
+
+                    // 2. Fetch Site Details (need for upload path)
+                    const site = sites.find(s => s.id === photo.site_id);
+
+                    if (!site) {
+                        throw new Error(`Site not found for ID: ${photo.site_id}`);
+                    }
+
+                    // 3. Determine Upload Path
+                    // Logic: PHOTOS / Category / Filename
+                    const req = reqs.find(r => r.id === photo.photo_req_id);
+                    let filenameToUse = photo.filename;
+
+                    if (req) {
+                        const sanitizedCategory = req.name
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]+/g, '_')
+                            .replace(/^_+|_+$/g, '');
+
+                        filenameToUse = `${sanitizedCategory}/${photo.filename}`;
+                    }
+
+                    // 4. Upload to SharePoint
+                    await SharePointService.uploadPhoto(
+                        site.phase,
+                        site.name,
+                        filenameToUse,
+                        blob
+                    );
+
+                    // 5. Update Status
+                    await SupabaseService.updatePhotoSharePointStatus(
+                        photo.id,
+                        'synced'
+                    );
+
+                    successCount++;
+                    console.log(`Synced ${photo.filename} to SharePoint`);
+
+                } catch (err) {
+                    console.error(`Failed to sync ${photo.filename}:`, err);
+                    failCount++;
+                }
+            }
+
+            return { success: successCount, failed: failCount, total: pendingPhotos.length };
+
+        } catch (error) {
+            console.error('Sync Supabase->SharePoint failed:', error);
+            throw error;
+        }
+    },
+
     init() {
         window.addEventListener('online', () => {
             console.log('Network restored. Processing sync queue...');
@@ -326,6 +435,10 @@ export const SyncService = {
         });
 
         if (this.isOnline()) {
+            // Initial Sync
+            this.syncSites();
+            this.syncRequirements();
+
             setTimeout(() => this.processQueue(), 5000);
         }
     }

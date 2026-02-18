@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ExcelService } from '../services/ExcelService';
 import { StorageService } from '../services/StorageService';
+import { SyncService } from '../services/SyncService';
+import { SupabaseService } from '../services/SupabaseService';
 
 function DataLoadScreen({ onDataLoaded }) {
     const navigate = useNavigate();
@@ -250,6 +252,60 @@ function DataLoadScreen({ onDataLoaded }) {
                     >
                         🧪 Load Demo Data (Testing)
                     </button>
+
+                    {/* CLOUD SYNC SECTION */}
+                    <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
+                        <h3 style={{ fontSize: '18px', marginBottom: '12px' }}>☁️ Cloud Sync Management</h3>
+                        <p className="text-muted" style={{ fontSize: '12px', marginBottom: '16px' }}>
+                            Move photos from Supabase Buffer to SharePoint. Run this periodically.
+                        </p>
+
+                        <button
+                            onClick={async () => {
+                                if (!window.confirm('Start syncing pending photos to SharePoint? This may take a while.')) return;
+
+                                setLoading(true);
+                                try {
+                                    const result = await SyncService.syncSupabaseToSharePoint((current, total, filename) => {
+                                        setError(`Syncing ${current}/${total}: ${filename}`);
+                                    });
+
+                                    alert(`Sync Complete!\n\nSuccess: ${result.success}\nFailed: ${result.failed}`);
+                                    setError('');
+                                } catch (err) {
+                                    setError(`Sync Failed: ${err.message}`);
+                                } finally {
+                                    setLoading(false);
+                                }
+                            }}
+                            className="btn btn-primary"
+                            disabled={loading}
+                            style={{
+                                width: '100%',
+                                backgroundColor: '#2e7d32',
+                                borderColor: '#2e7d32'
+                            }}
+                        >
+                            {loading ? 'Syncing...' : '🔄 Sync Pending Photos to SharePoint'}
+                        </button>
+                    </div>
+
+                    <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    const pending = await SupabaseService.getPendingPhotos();
+                                    alert(`Pending Photos: ${pending.length}\n\nThis checks the 'buffer-photos' queue.`);
+                                } catch (err) {
+                                    alert(`Check failed: ${err.message}`);
+                                }
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#666', textDecoration: 'underline', cursor: 'pointer', fontSize: '12px' }}
+                        >
+                            Check Queue Status
+                        </button>
+                    </div>
+
                 </div>
             </div>
         </div>

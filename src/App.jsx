@@ -15,7 +15,7 @@ import { SyncService } from './services/SyncService';
 // Version for deployment debugging
 // Version for deployment debugging
 // Version for deployment debugging
-const APP_VERSION = 'v2.6.1-20260207-1945';
+const APP_VERSION = 'v2.7.0-Supabase-20260218';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
@@ -79,27 +79,31 @@ function App() {
     };
 
     useEffect(() => {
-        // MIGRATION: Force logout for v2.6.1 update to ensure session policy is active
-        // using a specific key to guarantee it runs exactly once per device per update
-        const MIGRATION_KEY = 'rmr_cop_migration_v261';
+        // MIGRATION: Force logout for v2.7.0 to ensure clear cache
+        const MIGRATION_KEY = 'rmr_cop_migration_v270';
         const hasMigrated = localStorage.getItem(MIGRATION_KEY);
 
         if (!hasMigrated) {
-            console.log('Migration: v2.6.1 update. Forcing one-time logout.');
+            console.log('Migration: v2.7.0 update. Forcing one-time logout & cache clear.');
             localStorage.setItem(MIGRATION_KEY, 'true');
-            // Clear auth to force login
             localStorage.removeItem('rmr_cop_user_auth');
-            // Also clear legacy session if exists
             localStorage.removeItem('rmr_cop_last_active');
 
+            // Clear potentially stale photo queues
+            // localStorage.removeItem('site_walk_pending_uploads'); 
+
             setIsPinAuthenticated(false);
-            return; // Stop here
+            // Force reload to ensure new code is active
+            window.location.reload();
+            return;
         }
 
         // Initialize Session Service
         if (isPinAuthenticated) {
             SessionService.init(handleLogout);
         }
+
+
 
         initializeApp();
         // Initialize background sync service
@@ -125,7 +129,7 @@ function App() {
 
             // Only try to load data if we have passed the PIN gate
             if (isPinAuthenticated) {
-                await loadDataFromSharePoint();
+                await loadDataFromSupabase();
             } else {
                 setIsLoading(false); // Stop loading to show PIN screen
             }
@@ -137,36 +141,34 @@ function App() {
         }
     };
 
-    const loadDataFromSharePoint = async () => {
+    const loadDataFromSupabase = async () => {
         try {
             setIsLoading(true);
-            console.log('Loading data from SharePoint via Service Account...');
+            console.log('Syncing data from Supabase...');
 
-            // Load site details and photo requirements from SharePoint (Proxy)
-            const [siteDetails, photoRequirements] = await Promise.all([
-                SharePointService.loadSiteDetails(),
-                SharePointService.loadPhotoRequirements()
-            ]);
+            // Use SyncService to fetch from Supabase and save to IDB
+            const sitesSuccess = await SyncService.syncSites();
+            const reqsSuccess = await SyncService.syncRequirements();
 
-            console.log(`Loaded ${siteDetails.length} sites from SharePoint`);
-            console.log(`Loaded ${photoRequirements.length} photo requirements from SharePoint`);
+            if (!sitesSuccess || !reqsSuccess) {
+                throw new Error('Failed to sync data from Supabase');
+            }
 
-            // Save to localStorage for offline access
-            await StorageService.saveSites(siteDetails);
-            await StorageService.savePhotoRequirements(photoRequirements);
+            // Load from IDB to state
+            const loadedSites = await StorageService.getSites();
+            setSites(loadedSites);
+            console.log(`Loaded ${loadedSites.length} sites into state`);
 
-            setSites(siteDetails);
         } catch (err) {
-            console.error('Error loading from SharePoint:', err);
+            console.error('Error loading from Supabase:', err);
 
             // Fallback to cached data
             const cachedSites = await StorageService.getSites();
             if (cachedSites.length > 0) {
-                console.log('Using cached data due to SharePoint error');
+                console.log('Using cached data due to sync error');
                 setSites(cachedSites);
-                // No alert needed on initial load if cache is available
             } else {
-                setError(`Failed to load data from SharePoint: ${err.message}`);
+                setError(`Failed to load data: ${err.message}`);
             }
         } finally {
             setIsLoading(false);
@@ -175,7 +177,7 @@ function App() {
 
     // Manual refresh handler
     const handleRefresh = async () => {
-        await loadDataFromSharePoint();
+        await loadDataFromSupabase();
     };
 
     const handlePinSuccess = () => {
@@ -207,9 +209,9 @@ function App() {
                         margin: '0 auto 16px auto',
                         animation: 'spin 1s linear infinite'
                     }}></div>
-                    <h2>Connecting to SharePoint...</h2>
-                    <p>Downloading Site List and Photo Requirements</p>
-                    <p style={{ fontSize: '12px', opacity: 0.8, marginTop: '8px' }}>Using Service Account</p>
+                    <h2>Connecting to Database...</h2>
+                    <p>Syncing Site List and Requirements</p>
+                    <p style={{ fontSize: '12px', opacity: 0.8, marginTop: '8px' }}>Powered by Supabase</p>
                     <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
                 </div>
             </div>
