@@ -296,7 +296,7 @@ function QuestionnaireScreen() {
 
         try {
             // Update the Site Tracker directly instead of creating a separate file
-            await SharePointService.updateSiteTrackerRow(site.id, formData);
+            await SharePointService.updateSiteTrackerRow(site.siteId, formData);
 
             setUploadProgress({
                 current: 1,

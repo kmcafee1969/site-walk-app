@@ -331,6 +331,13 @@ class SharePointService {
             setColumn('Telco / Fiber POC', formData.telcoFiberPOC);
             setColumn('Lease Area Issues', formData.leaseAreaIssues);
             setColumn('Gate/Shelter Code', formData.gateShelterCode);
+            setColumn('Site Type', formData.towerType);
+
+            // Viaero POC: concatenate Name, Phone, Email
+            const viaeroPoc = [formData.pocName, formData.pocPhone, formData.pocEmail]
+                .filter(Boolean)
+                .join(', ');
+            setColumn('Viaero POC', viaeroPoc);
 
             // Measurements
             for (let i = 1; i <= 9; i++) {
