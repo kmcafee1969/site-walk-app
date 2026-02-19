@@ -13,6 +13,42 @@ function DataLoadScreen({ onDataLoaded }) {
     const [photoReqsFile, setPhotoReqsFile] = useState(null);
     const [siteTrackerLoaded, setSiteTrackerLoaded] = useState(false);
     const [photoReqsLoaded, setPhotoReqsLoaded] = useState(false);
+    const [syncStatus, setSyncStatus] = useState('');
+
+    const syncFromSharePoint = async () => {
+        if (!window.confirm('Import data from SharePoint Excel files into Supabase?\n\nThis will update sites, photo requirements, and form fields.')) return;
+
+        setLoading(true);
+        setError('');
+        setSyncStatus('Connecting to SharePoint...');
+
+        try {
+            const response = await fetch('/api/import-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-auth-pin': '2025'
+                }
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Import failed');
+            }
+
+            setSyncStatus('');
+            alert(`✅ Import Complete!\n\n${result.message}\n\n${result.details.errors.length > 0 ? 'Warnings:\n' + result.details.errors.join('\n') : 'No errors.'}`);
+
+            // Refresh the app data
+            window.location.href = '/';
+        } catch (err) {
+            setError(`SharePoint Sync Failed: ${err.message}`);
+            setSyncStatus('');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleSiteTrackerUpload = async (event) => {
         const file = event.target.files[0];
@@ -133,8 +169,43 @@ function DataLoadScreen({ onDataLoaded }) {
                 <div className="card" style={{ maxWidth: '600px', margin: '0 auto' }}>
                     <h2 style={{ marginBottom: '8px', textAlign: 'center' }}>Welcome</h2>
                     <p className="text-muted mb-3" style={{ textAlign: 'center' }}>
-                        Upload both Excel files to get started.
+                        Sync data from SharePoint or upload Excel files manually.
                     </p>
+
+                    {/* AUTOMATED SYNC BUTTON */}
+                    <div style={{
+                        padding: '20px',
+                        marginBottom: '24px',
+                        background: 'linear-gradient(135deg, #1565c0 0%, #1976d2 100%)',
+                        borderRadius: '12px',
+                        textAlign: 'center'
+                    }}>
+                        <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '13px', marginBottom: '12px' }}>
+                            Automatically import sites & photo requirements from SharePoint
+                        </p>
+                        <button
+                            onClick={syncFromSharePoint}
+                            disabled={loading}
+                            style={{
+                                width: '100%',
+                                padding: '14px 24px',
+                                fontSize: '16px',
+                                fontWeight: '600',
+                                backgroundColor: 'white',
+                                color: '#1565c0',
+                                border: 'none',
+                                borderRadius: '8px',
+                                cursor: loading ? 'not-allowed' : 'pointer',
+                                opacity: loading ? 0.7 : 1
+                            }}
+                        >
+                            {loading && syncStatus ? syncStatus : '📥 Sync from SharePoint'}
+                        </button>
+                    </div>
+
+                    <div style={{ textAlign: 'center', color: '#999', fontSize: '12px', marginBottom: '16px' }}>
+                        — or upload manually —
+                    </div>
 
                     {error && (
                         <div style={{
