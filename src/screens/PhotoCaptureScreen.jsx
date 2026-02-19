@@ -841,9 +841,9 @@ function PhotoCaptureScreen() {
                         ←
                     </Link>
                     <div>
-                        <h1 style={{ fontSize: '16px' }}>{photoReq.id}: {photoReq.name}</h1>
+                        <h1 style={{ fontSize: '16px' }}>{photoReq.name}</h1>
                         <p style={{ margin: 0, opacity: 0.9, fontSize: '12px' }}>
-                            {site.name} - Project #{site.id}
+                            {site.name} - Project #{site.siteId || site.name}
                         </p>
                     </div>
                 </div>
