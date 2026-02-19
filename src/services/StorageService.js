@@ -44,6 +44,7 @@ export const StorageService = {
         const db = await this.getDB();
         const tx = db.transaction('sites', 'readwrite');
         const store = tx.objectStore('sites');
+        await store.clear(); // Clear old cached sites to prevent duplicates after re-import
         await Promise.all(sites.map(site => store.put(site)));
         await tx.done;
     },
