@@ -7,7 +7,7 @@ import { sharepointConfig } from '../config/sharepoint.config';
 import SharePointService from '../services/SharePointService';
 
 // Version info for debugging
-export const APP_VERSION = '2.1.0';
+export const APP_VERSION = '2.7.0';
 export const APP_BUILD_DATE = '2026-02-04';
 
 // Unique ID counter to ensure no collisions even with rapid captures
