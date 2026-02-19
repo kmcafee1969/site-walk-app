@@ -239,7 +239,7 @@ function QuestionnaireScreen() {
             ['Site Walk Questionnaire'],
             [''],
             ['Site Name', site.name],
-            ['Site ID', site.id],
+            ['Site ID', site.siteId],
             ['Phase', site.phase],
             [''],
             ['Field', 'Value'],
@@ -411,7 +411,7 @@ function QuestionnaireScreen() {
                     </button>
                     <div>
                         <h1 style={{ fontSize: '18px', margin: 0 }}>Site Walk Questionnaire</h1>
-                        <p style={{ margin: 0, opacity: 0.9, fontSize: '12px' }}>{site.name} - Site ID: {site.id}</p>
+                        <p style={{ margin: 0, opacity: 0.9, fontSize: '12px' }}>{site.name} - Site ID: {site.siteId}</p>
                     </div>
                 </div>
             </div>

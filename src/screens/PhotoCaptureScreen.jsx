@@ -506,7 +506,7 @@ function PhotoCaptureScreen() {
 
                 // Prepare text lines
                 const lines = [
-                    `Site: ${site.name} (${site.id})`,
+                    `Site: ${site.name} (${site.siteId})`,
                     locationStr
                 ];
 
@@ -568,7 +568,7 @@ function PhotoCaptureScreen() {
                 const nextNum = getNextSequentialNumber(photosRef.current, photoReqName);
                 const filename = generatePhotoName(
                     site.name,
-                    site.id,
+                    site.siteId,
                     photoReqName,
                     nextNum.sequential,
                     nextNum.sub
@@ -785,7 +785,7 @@ function PhotoCaptureScreen() {
                 const nextNum = getNextSequentialNumber(photosRef.current, photoReqName);
                 const filename = generatePhotoName(
                     site.name,
-                    site.id,
+                    site.siteId,
                     photoReqName,
                     nextNum.sequential,
                     nextNum.sub

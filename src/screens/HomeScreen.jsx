@@ -304,7 +304,7 @@ function HomeScreen({ sites, onRefresh, onLogout }) {
                                                                             {site.name || 'Unnamed Site'}
                                                                         </h3>
                                                                         <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#666' }}>
-                                                                            Site ID: {site.id}
+                                                                            Site ID: {site.siteId}
                                                                         </p>
                                                                         <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#666' }}>
                                                                             📍 {site.address}, {site.city}, {site.state}
