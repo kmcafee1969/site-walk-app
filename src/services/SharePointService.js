@@ -361,6 +361,91 @@ class SharePointService {
     }
 
     /**
+     * Read a specific row from the Site Tracker
+     * Returns mapped data object
+     */
+    async readSiteTrackerRow(targetSiteId) {
+        try {
+            console.log(`Reading tracker for site ${targetSiteId}...`);
+
+            const { siteId, driveId, itemId, worksheetName } = await this.getTrackerDriveItemId();
+            const rowNumber = await this.findSiteRowInTracker(targetSiteId);
+
+            if (!rowNumber) {
+                console.warn(`Site ${targetSiteId} not found in Site Tracker`);
+                return null;
+            }
+
+            // Read header row to build dynamic column mapping
+            const headerEndpoint = `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('${worksheetName}')/range(address='A1:AZ1')`;
+            const headerResponse = await this.proxyRequest(headerEndpoint, 'GET');
+            const headers = headerResponse.values[0] || [];
+
+            // Build column index map
+            const normalizeHeader = (h) => String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const columnMap = {};
+            headers.forEach((h, i) => {
+                columnMap[normalizeHeader(h)] = i;
+            });
+
+            // Read data row
+            const rowAddress = `A${rowNumber}:AZ${rowNumber}`;
+            const rowResponse = await this.proxyRequest(
+                `/sites/${siteId}/drives/${driveId}/items/${itemId}/workbook/worksheets('${worksheetName}')/range(address='${rowAddress}')`,
+                'GET'
+            );
+            const values = rowResponse.values[0] || [];
+
+            const getCol = (name) => {
+                const idx = columnMap[normalizeHeader(name)];
+                return (idx !== undefined && values[idx] !== undefined) ? String(values[idx]) : '';
+            };
+
+            // Map back to our internal field names
+            const data = {
+                walkedBy: getCol('Walked By'),
+                dateWalked: getCol('Date Walked'),
+                checkedIn: getCol('Checked In'),
+                checkedOut: getCol('Checked Out'),
+                towerOwner: getCol('Tower Owner'),
+                faNumber: getCol('Tower Owner Site Number'),
+                leaseAreaType: getCol('Lease Area Type'),
+                powerCompany: getCol('Power Company'),
+                meterNumber: getCol('Meter Number'),
+                telcoFiberProvider: getCol('Telco / Fiber Provider'),
+                telcoFiberPOC: getCol('Telco / Fiber POC'),
+                leaseAreaIssues: getCol('Lease Area Issues'),
+                gateShelterCode: getCol('Gate/Shelter Code'),
+                towerType: getCol('Site Type'),
+                // Viaero POC needs parsing
+                viaeroPoc: getCol('Viaero POC'),
+                // Measurements
+                measurement10: getCol('Measurement 10 (feet)'),
+                measurement11: getCol('Measurement 11 (feet)')
+            };
+
+            // Measurements 1-9
+            for (let i = 1; i <= 9; i++) {
+                data[`measurement${i}`] = getCol(`Measurement ${i} (inches)`);
+            }
+
+            // Parse Viaero POC if present
+            if (data.viaeroPoc) {
+                const parts = data.viaeroPoc.split(',').map(s => s.trim());
+                if (parts[0]) data.pocName = parts[0];
+                if (parts[1]) data.pocPhone = parts[1];
+                if (parts[2]) data.pocEmail = parts[2];
+            }
+
+            return data;
+
+        } catch (error) {
+            console.error('Error reading site tracker row:', error);
+            return null;
+        }
+    }
+
+    /**
      * Load photo requirements
      */
     async loadPhotoRequirements() {

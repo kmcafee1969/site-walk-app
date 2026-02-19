@@ -148,21 +148,19 @@ function QuestionnaireScreen() {
                     }
 
                     // 3. Load Remote Questionnaire (if requested)
-                    if (location.state?.loadFromCloud) {
+                    // 3. Load from Master Tracker (Excel) - Shared Source of Truth
+                    if (navigator.onLine) {
                         try {
-                            console.log("Loading remote questionnaire...");
-                            const remoteData = await SharePointService.downloadQuestionnaire(foundSite.phase, foundSite.name, foundSite.id);
-                            if (remoteData) {
-                                console.log("Loaded remote data:", remoteData);
-                                initialData = { ...initialData, ...remoteData };
+                            console.log("Reading from Master Tracker...");
+                            const trackerData = await SharePointService.readSiteTrackerRow(foundSite.siteId);
 
-                                // Save merged data locally so we have it next time
-                                await StorageService.saveQuestionnaire(siteId, initialData, 'synced');
+                            if (trackerData) {
+                                console.log("Loaded Master Tracker data:", trackerData);
+                                // Merge tracker data into initialData
+                                initialData = { ...initialData, ...trackerData };
                             }
                         } catch (err) {
-                            console.error("Failed to load remote questionnaire:", err);
-                            // We purposefully don't block loading if remote fails, just log it.
-                            // Maybe show a toast/alert? For now, console error.
+                            console.error("Failed to read from Master Tracker:", err);
                         }
                     }
 
