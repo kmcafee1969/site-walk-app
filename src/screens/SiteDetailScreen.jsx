@@ -198,8 +198,26 @@ function SiteDetailScreen() {
             }
 
             // Load questionnaire
-            const quest = await StorageService.getQuestionnaire(siteId);
-            setQuestionnaire(quest);
+            // Load questionnaire
+            const loadQuestionnaire = async () => {
+                const quest = await StorageService.getQuestionnaire(siteId);
+                setQuestionnaire(quest);
+            };
+            loadQuestionnaire();
+
+            // Add visibility listener to reload when coming back
+            const handleVisibilityChange = () => {
+                if (document.visibilityState === 'visible') {
+                    loadQuestionnaire();
+                }
+            };
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            window.addEventListener('focus', loadQuestionnaire);
+
+            return () => {
+                document.removeEventListener('visibilitychange', handleVisibilityChange);
+                window.removeEventListener('focus', loadQuestionnaire);
+            };
 
             // Check if questionnaire exists in SharePoint (remote)
             if (isOnline) {

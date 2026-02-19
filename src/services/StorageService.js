@@ -2,7 +2,7 @@
 import { openDB } from 'idb';
 
 const DB_NAME = 'site-walk-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const StorageService = {
     async getDB() {
