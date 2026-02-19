@@ -3,7 +3,7 @@
     "crons": [
         {
             "path": "/api/sync-photos",
-            "schedule": "*/15 * * * *"
+            "schedule": "0 0 * * *"
         }
     ],
     "functions": {

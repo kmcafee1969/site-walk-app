@@ -328,20 +328,27 @@ function DataLoadScreen({ onDataLoaded }) {
                     <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
                         <h3 style={{ fontSize: '18px', marginBottom: '12px' }}>☁️ Cloud Sync Management</h3>
                         <p className="text-muted" style={{ fontSize: '12px', marginBottom: '16px' }}>
-                            Move photos from Supabase Buffer to SharePoint. Run this periodically.
+                            Photos sync to SharePoint automatically every day. Use the button below for immediate sync.
                         </p>
 
                         <button
                             onClick={async () => {
-                                if (!window.confirm('Start syncing pending photos to SharePoint? This may take a while.')) return;
+                                if (!window.confirm('Start syncing pending photos to SharePoint?')) return;
 
                                 setLoading(true);
+                                setError('Syncing photos to SharePoint...');
                                 try {
-                                    const result = await SyncService.syncSupabaseToSharePoint((current, total, filename) => {
-                                        setError(`Syncing ${current}/${total}: ${filename}`);
+                                    const response = await fetch('/api/sync-photos', {
+                                        method: 'POST',
+                                        headers: { 'x-auth-pin': '2025' }
                                     });
+                                    const result = await response.json();
 
-                                    alert(`Sync Complete!\n\nSuccess: ${result.success}\nFailed: ${result.failed}`);
+                                    if (result.success) {
+                                        alert(`Sync Complete!\n\nSynced: ${result.details.synced}\nFailed: ${result.details.failed}\nTotal: ${result.details.total}${result.details.errors.length > 0 ? '\n\nErrors:\n' + result.details.errors.join('\n') : ''}`);
+                                    } else {
+                                        alert(`Sync Error: ${result.error}`);
+                                    }
                                     setError('');
                                 } catch (err) {
                                     setError(`Sync Failed: ${err.message}`);
@@ -357,7 +364,7 @@ function DataLoadScreen({ onDataLoaded }) {
                                 borderColor: '#2e7d32'
                             }}
                         >
-                            {loading ? 'Syncing...' : '🔄 Sync Pending Photos to SharePoint'}
+                            {loading ? 'Syncing...' : '🔄 Sync Photos to SharePoint Now'}
                         </button>
                     </div>
 
