@@ -1,5 +1,19 @@
 {
     "cleanUrls": true,
+    "crons": [
+        {
+            "path": "/api/sync-photos",
+            "schedule": "*/15 * * * *"
+        }
+    ],
+    "functions": {
+        "api/sync-photos.js": {
+            "maxDuration": 60
+        },
+        "api/import-data.js": {
+            "maxDuration": 60
+        }
+    },
     "rewrites": [
         {
             "source": "/api/(.*)",
