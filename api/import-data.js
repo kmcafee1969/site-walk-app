@@ -44,6 +44,18 @@ const toString = (val) => {
     return String(val).trim();
 };
 
+// Helper to convert Excel time serial to HH:MM format
+const toTime = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    if (typeof val === 'number' && val >= 0 && val < 1) {
+        const totalMinutes = Math.round(val * 24 * 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+    return String(val).trim();
+};
+
 module.exports = async function handler(req, res) {
     // CORS
     res.setHeader('Access-Control-Allow-Credentials', true);
@@ -260,6 +272,21 @@ function parseSiteTracker(buffer) {
                     form_uploaded: toString(rowMap.sitewalkformuploaded || rowMap.formuploaded),
                     date_walked: toString(rowMap.datewalked),
                     walked_by: toString(rowMap.walkedby),
+                    checked_in: toTime(rowMap.checkedin),
+                    checked_out: toTime(rowMap.checkedout),
+                    lease_area_issues: toString(rowMap.leaseareaissues),
+                    // Measurements
+                    measurement_1: toString(rowMap.measurement1inches || rowMap.measurement1),
+                    measurement_2: toString(rowMap.measurement2inches || rowMap.measurement2),
+                    measurement_3: toString(rowMap.measurement3inches || rowMap.measurement3),
+                    measurement_4: toString(rowMap.measurement4inches || rowMap.measurement4),
+                    measurement_5: toString(rowMap.measurement5inches || rowMap.measurement5),
+                    measurement_6: toString(rowMap.measurement6inches || rowMap.measurement6),
+                    measurement_7: toString(rowMap.measurement7inches || rowMap.measurement7),
+                    measurement_8: toString(rowMap.measurement8inches || rowMap.measurement8),
+                    measurement_9: toString(rowMap.measurement9inches || rowMap.measurement9),
+                    measurement_10: toString(rowMap.measurement10feet || rowMap.measurement10),
+                    measurement_11: toString(rowMap.measurement11feet || rowMap.measurement11),
                 }
             });
         }
