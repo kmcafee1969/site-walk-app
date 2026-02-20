@@ -398,35 +398,91 @@ class SharePointService {
 
             const getCol = (name) => {
                 const idx = columnMap[normalizeHeader(name)];
-                return (idx !== undefined && values[idx] !== undefined) ? String(values[idx]) : '';
+                return (idx !== undefined && values[idx] !== undefined) ? values[idx] : ''; // Keep raw value for processing
+            };
+
+            // Helper to convert Excel time (serial or string) to HH:MM (24h)
+            const toTime = (val) => {
+                if (val === null || val === undefined || val === '') return '';
+
+                // 1. Handle Excel serial (fraction of day, e.g. 0.41666)
+                // Check if it's a number
+                const num = Number(val);
+                if (!isNaN(num) && num > 0 && num < 1) {
+                    const totalMinutes = Math.round(num * 24 * 60);
+                    const hours = Math.floor(totalMinutes / 60);
+                    const minutes = totalMinutes % 60;
+                    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                }
+
+                // 2. Handle string, e.g. "10:00 AM" or "14:00"
+                const str = String(val).trim();
+                if (str.match(/^\d{1,2}:\d{2}\s?(AM|PM)?$/i)) {
+                    // Try parsing with Date
+                    const d = new Date(`1/1/1970 ${str}`);
+                    if (!isNaN(d.getTime())) {
+                        // Return HH:MM in 24h format
+                        const h = d.getHours().toString().padStart(2, '0');
+                        const m = d.getMinutes().toString().padStart(2, '0');
+                        return `${h}:${m}`;
+                    }
+                }
+
+                return str;
+            };
+
+            // Helper to convert Excel date serial to YYYY-MM-DD
+            const toDate = (val) => {
+                if (val === null || val === undefined || val === '') return '';
+
+                // 1. Handle Excel date serial (e.g. 46070 = some date in 2026)
+                const num = Number(val);
+                if (!isNaN(num) && num > 40000 && num < 60000) {
+                    // Excel epoch is Dec 30, 1899
+                    const excelEpoch = new Date(1899, 11, 30);
+                    const date = new Date(excelEpoch.getTime() + num * 24 * 60 * 60 * 1000);
+                    return date.toISOString().split('T')[0]; // YYYY-MM-DD
+                }
+
+                // 2. Handle string date (already formatted or ISO)
+                const str = String(val).trim();
+                // Try to parse as date and return ISO format
+                if (str) {
+                    const d = new Date(str);
+                    if (!isNaN(d.getTime())) {
+                        return d.toISOString().split('T')[0];
+                    }
+                }
+
+                return str;
             };
 
             // Map back to our internal field names
             const data = {
-                walkedBy: getCol('Walked By'),
-                dateWalked: getCol('Date Walked'),
-                checkedIn: getCol('Checked In'),
-                checkedOut: getCol('Checked Out'),
-                towerOwner: getCol('Tower Owner'),
-                faNumber: getCol('Tower Owner Site Number'),
-                leaseAreaType: getCol('Lease Area Type'),
-                powerCompany: getCol('Power Company'),
-                meterNumber: getCol('Meter Number'),
-                telcoFiberProvider: getCol('Telco / Fiber Provider'),
-                telcoFiberPOC: getCol('Telco / Fiber POC'),
-                leaseAreaIssues: getCol('Lease Area Issues'),
-                gateShelterCode: getCol('Gate/Shelter Code'),
-                towerType: getCol('Site Type'),
+                walkedBy: String(getCol('Walked By')),
+                dateWalked: toDate(getCol('Date Walked')),
+                checkedIn: toTime(getCol('Checked In')),
+                checkedOut: toTime(getCol('Checked Out')),
+                towerOwner: String(getCol('Tower Owner')),
+                faNumber: String(getCol('Tower Owner Site Number')),
+                leaseAreaType: String(getCol('Lease Area Type')),
+                powerCompany: String(getCol('Power Company')),
+                meterNumber: String(getCol('Meter Number')),
+                telcoFiberProvider: String(getCol('Telco / Fiber Provider')),
+                telcoFiberPOC: String(getCol('Telco / Fiber POC')),
+                leaseAreaIssues: String(getCol('Lease Area Issues')),
+                gateShelterCode: String(getCol('Gate/Shelter Code')),
+                towerType: String(getCol('Site Type')),
                 // Viaero POC needs parsing
-                viaeroPoc: getCol('Viaero POC'),
+                viaeroPoc: String(getCol('Viaero POC')),
                 // Measurements
-                measurement10: getCol('Measurement 10 (feet)'),
-                measurement11: getCol('Measurement 11 (feet)')
+                measurement10: String(getCol('Measurement 10 (feet)')),
+                measurement11: String(getCol('Measurement 11 (feet)'))
             };
 
             // Measurements 1-9
             for (let i = 1; i <= 9; i++) {
-                data[`measurement${i}`] = getCol(`Measurement ${i} (inches)`);
+                data[`measurement${i}`] = String(getCol(`Measurement ${i} (inches)`));
             }
 
             // Parse Viaero POC if present

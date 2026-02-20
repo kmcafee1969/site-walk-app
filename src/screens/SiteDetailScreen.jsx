@@ -16,7 +16,7 @@ function SiteDetailScreen() {
     const [sharepointCounts, setSharepointCounts] = useState({}); // NEW: SharePoint photo counts per req
     const [loadingSharepointCounts, setLoadingSharepointCounts] = useState(false); // NEW
     const [questionnaire, setQuestionnaire] = useState(null);
-    const [hasRemoteQuestionnaire, setHasRemoteQuestionnaire] = useState(false);
+    // const [hasRemoteQuestionnaire, setHasRemoteQuestionnaire] = useState(false); // REMOVED: Legacy file check
     const [isUploading, setIsUploading] = useState(false);
     const [isOnline, setIsOnline] = useState(navigator.onLine); // Initialize state
     const [logs, setLogs] = useState([]); // Debug logs
@@ -219,41 +219,8 @@ function SiteDetailScreen() {
                 window.removeEventListener('focus', loadQuestionnaire);
             };
 
-            // Check if questionnaire exists in SharePoint (remote)
-            if (isOnline) {
-                appendLog(`Checking questionnaire: ${currentSite.phase} / ${currentSite.name}`);
+            // Legacy questionnaire file check removed. Master Tracker is source of truth.
 
-                // TEST RESOLUTION
-                try {
-                    appendLog("Testing Path Resolution...");
-                    const resolved = await SharePointService.resolveSharePointPath(currentSite.phase, currentSite.name);
-                    appendLog(`Resolved Path: ${resolved}`);
-                } catch (resErr) {
-                    appendLog(`Resolution Error: ${resErr.message}`);
-                }
-
-                SharePointService.checkQuestionnaireExists(currentSite.phase, currentSite.name, siteId)
-                    .then(async exists => {
-                        appendLog(`Questionnaire exists: ${exists}`);
-                        setHasRemoteQuestionnaire(exists);
-
-                        // SYNC LOGIC: If remote is gone, but we have a "synced" local copy, delete it.
-                        // (This handles the case where user deleted file in SharePoint to reset)
-                        if (!exists && isOnline) {
-                            const localQ = await StorageService.getQuestionnaire(siteId);
-
-                            // Auto-delete ONLY if it was previously synced.
-                            if (localQ && localQ.status === 'synced') {
-                                appendLog("Remote missing & local is synced. Reseting local state.");
-                                await StorageService.deleteQuestionnaire(siteId);
-                                setQuestionnaire(null);
-                            }
-                        }
-                    })
-                    .catch(e => appendLog(`Err check quest: ${e.message}`));
-            } else {
-                appendLog("Skipping remote check: Offline");
-            }
 
             // Reconcile with server (check for deletions and downloads)
             if (isOnline) {
@@ -611,39 +578,17 @@ function SiteDetailScreen() {
                         Complete the questionnaire after capturing all photos.
                     </p>
 
-                    <Link to={`/site/${siteId}/questionnaire`} state={{ loadFromCloud: hasRemoteQuestionnaire }}>
-                        <button className={`btn ${questionnaire || hasRemoteQuestionnaire ? 'btn-success' : 'btn-primary'}`} style={{ width: '100%' }}>
-                            {questionnaire || hasRemoteQuestionnaire ? '✓ View/Edit Questionnaire' : '📋 Start Questionnaire'}
+                    <Link to={`/site/${siteId}/questionnaire`} state={{ loadFromCloud: true }}>
+                        <button className={`btn ${questionnaire ? 'btn-success' : 'btn-primary'}`} style={{ width: '100%' }}>
+                            {questionnaire ? '✓ View/Edit Questionnaire' : '📋 Start Questionnaire'}
                         </button>
                     </Link>
 
                     {/* Conflict Resolution: Local Draft but No Remote File */}
-                    {questionnaire && !hasRemoteQuestionnaire && isOnline && (
-                        <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#fff3e0', borderRadius: '8px', border: '1px solid #ffe0b2' }}>
-                            <p style={{ fontSize: '12px', color: '#e65100', margin: '0 0 8px 0' }}>
-                                ⚠️ <strong>Sync Conflict:</strong> You have a local draft, but the file is missing from SharePoint.
-                            </p>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button
-                                    onClick={async () => {
-                                        if (window.confirm('Are you sure you want to discard this local draft? This cannot be undone.')) {
-                                            await StorageService.deleteQuestionnaire(siteId);
-                                            setQuestionnaire(null);
-                                        }
-                                    }}
-                                    className="btn btn-secondary"
-                                    style={{ flex: 1, fontSize: '12px', padding: '8px', backgroundColor: '#ef5350', color: 'white', border: 'none' }}
-                                >
-                                    Discard Draft
-                                </button>
-                                <button
-                                    onClick={handleUploadAllPhotos} // Re-use upload mechanism? logic might need tweak
-                                    className="btn btn-primary"
-                                    style={{ flex: 1, fontSize: '12px', padding: '8px' }}
-                                >
-                                    Upload to Restore
-                                </button>
-                            </div>
+                    {/* Conflict Resolution: Removed - Master Tracker is source of truth */}
+                    {questionnaire && !isOnline && (
+                        <div style={{ fontSize: '12px', marginTop: '4px', textAlign: 'center', color: '#666' }}>
+                            Draft saved locally
                         </div>
                     )}
                 </div>

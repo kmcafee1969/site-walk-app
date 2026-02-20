@@ -147,17 +147,28 @@ function QuestionnaireScreen() {
                         console.log('📋 Re-applied tracker values over local cache');
                     }
 
-                    // 3. Load Remote Questionnaire (if requested)
                     // 3. Load from Master Tracker (Excel) - Shared Source of Truth
                     if (navigator.onLine) {
                         try {
-                            console.log("Reading from Master Tracker...");
+                            console.log("Reading from Master Tracker for siteId:", foundSite.siteId);
                             const trackerData = await SharePointService.readSiteTrackerRow(foundSite.siteId);
 
                             if (trackerData) {
-                                console.log("Loaded Master Tracker data:", trackerData);
-                                // Merge tracker data into initialData
-                                initialData = { ...initialData, ...trackerData };
+                                console.log("📊 Raw Master Tracker data:", JSON.stringify(trackerData));
+
+                                // CRITICAL: Only merge non-empty values from tracker
+                                // to avoid overwriting valid local data with empty strings
+                                const filteredTrackerData = {};
+                                Object.entries(trackerData).forEach(([key, value]) => {
+                                    if (value !== null && value !== undefined && value !== '' && value !== 'undefined') {
+                                        filteredTrackerData[key] = value;
+                                    }
+                                });
+
+                                console.log("📊 Filtered tracker data (non-empty only):", JSON.stringify(filteredTrackerData));
+                                initialData = { ...initialData, ...filteredTrackerData };
+                            } else {
+                                console.log("📊 No data returned from Master Tracker");
                             }
                         } catch (err) {
                             console.error("Failed to read from Master Tracker:", err);
