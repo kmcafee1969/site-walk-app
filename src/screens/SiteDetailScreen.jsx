@@ -6,6 +6,7 @@ import EmailService from '../services/EmailService';
 import { sharepointConfig } from '../config/sharepoint.config';
 import { SyncService } from '../services/SyncService';
 import { SupabaseService } from '../services/SupabaseService';
+import JSZip from 'jszip';
 
 function SiteDetailScreen() {
     const { siteId } = useParams();
@@ -271,11 +272,12 @@ function SiteDetailScreen() {
     const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, status: '' });
     const [showUploadModal, setShowUploadModal] = useState(false);
 
+    const PHOTOS_PER_ZIP = 40; // Max photos per zip to stay under 250MB and limit memory
+
     const handleUploadAllPhotos = async () => {
         if (!site) return;
 
-        // For upload, we need the full photo data - load it now
-        // This might still be heavy if there are MANY photos, but we process them one by one now
+        // Load all photos with full data (blobs)
         const allPhotos = await StorageService.getPhotos(siteId);
         const pendingPhotos = allPhotos.filter(p => p.status === 'pending');
 
@@ -284,109 +286,174 @@ function SiteDetailScreen() {
             return;
         }
 
-        // Check online status
-        const isOnline = SyncService.isOnline();
+        if (!SyncService.isOnline()) {
+            alert('You must be online to upload photos.');
+            return;
+        }
 
-        // Show modal
         setShowUploadModal(true);
-        setUploadProgress({
-            current: 0,
-            total: pendingPhotos.length,
-            status: isOnline ? 'Starting Supabase upload...' : 'Queueing for sync (Offline)...'
-        });
+        setIsUploading(true);
 
         try {
-            let successCount = 0;
+            // 1. Group photos by category (photoReqName)
+            const categoryMap = {};
+            for (const photo of pendingPhotos) {
+                const category = photo.photoReqName || 'uncategorized';
+                if (!categoryMap[category]) categoryMap[category] = [];
+                categoryMap[category].push(photo);
+            }
+
+            const categories = Object.keys(categoryMap);
+            console.log(`📦 ${pendingPhotos.length} photos across ${categories.length} categories`);
+
+            // 2. Build list of zip batches (split large categories into chunks)
+            const zipBatches = [];
+            for (const category of categories) {
+                const photos = categoryMap[category];
+                const sanitizedCategory = category
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '_')
+                    .replace(/^_+|_+$/g, '');
+
+                if (photos.length <= PHOTOS_PER_ZIP) {
+                    zipBatches.push({
+                        name: `${sanitizedCategory}.zip`,
+                        category,
+                        photos
+                    });
+                } else {
+                    // Split into parts
+                    for (let i = 0; i < photos.length; i += PHOTOS_PER_ZIP) {
+                        const chunk = photos.slice(i, i + PHOTOS_PER_ZIP);
+                        const partNum = Math.floor(i / PHOTOS_PER_ZIP) + 1;
+                        zipBatches.push({
+                            name: `${sanitizedCategory}_part${partNum}.zip`,
+                            category,
+                            photos: chunk
+                        });
+                    }
+                }
+            }
+
+            console.log(`📦 ${zipBatches.length} zip batches to upload`);
+
+            let totalUploaded = 0;
             let failCount = 0;
             const errors = [];
-            const uploadedFiles = []; // Track uploaded filenames
 
-            // Process photos one by one
-            for (let i = 0; i < pendingPhotos.length; i++) {
-                const photo = pendingPhotos[i];
-
-                setUploadProgress({
-                    current: i + 1,
-                    total: pendingPhotos.length,
-                    status: `Uploading ${photo.filename}...`
-                });
+            // 3. Process each zip batch
+            for (let batchIdx = 0; batchIdx < zipBatches.length; batchIdx++) {
+                const batch = zipBatches[batchIdx];
 
                 try {
-                    // Recover blob if missing (from dataUrl)
-                    if (!photo.blob && photo.dataUrl) {
-                        const res = await fetch(photo.dataUrl);
-                        photo.blob = await res.blob();
+                    // Update progress: zipping
+                    setUploadProgress({
+                        current: batchIdx + 1,
+                        total: zipBatches.length,
+                        status: `📦 Zipping ${batch.category} (${batch.photos.length} photos)...\nBatch ${batchIdx + 1} of ${zipBatches.length}`
+                    });
+
+                    // Create zip for this batch
+                    const zip = new JSZip();
+
+                    for (let i = 0; i < batch.photos.length; i++) {
+                        const photo = batch.photos[i];
+
+                        // Recover blob if missing
+                        let blob = photo.blob;
+                        if (!blob && photo.dataUrl) {
+                            const res = await fetch(photo.dataUrl);
+                            blob = await res.blob();
+                        }
+
+                        if (!blob) {
+                            console.warn(`Skipping ${photo.filename}: no blob/dataUrl`);
+                            continue;
+                        }
+
+                        // Add to zip (flat structure — just the filename)
+                        zip.file(photo.filename, blob);
                     }
 
-                    if (!photo.blob) {
-                        throw new Error('Photo corrupted (no blob/dataUrl)');
-                    }
+                    // Generate zip blob
+                    setUploadProgress(prev => ({
+                        ...prev,
+                        status: `📦 Compressing ${batch.name}...\nBatch ${batchIdx + 1} of ${zipBatches.length}`
+                    }));
 
-                    if (isOnline) {
-                        // Upload to Supabase (Buffer)
-                        await SupabaseService.uploadPhoto(photo.blob, {
-                            siteId: site.id,
-                            photoReqId: photo.photoReqId,
-                            filename: photo.filename,
-                            width: photo.width || 0,
-                            height: photo.height || 0,
-                            capturedAt: photo.capturedAt
-                        });
+                    const zipBlob = await zip.generateAsync({
+                        type: 'blob',
+                        compression: 'STORED' // No compression for JPEGs (already compressed)
+                    });
 
-                        // Mark as synced locally
+                    const sizeMB = (zipBlob.size / 1024 / 1024).toFixed(1);
+                    console.log(`📦 ${batch.name}: ${sizeMB} MB (${batch.photos.length} photos)`);
+
+                    // Upload zip directly to SharePoint
+                    setUploadProgress(prev => ({
+                        ...prev,
+                        status: `☁️ Uploading ${batch.name} (${sizeMB} MB)...\nBatch ${batchIdx + 1} of ${zipBatches.length}`
+                    }));
+
+                    await SharePointService.uploadZipToSharePoint(
+                        site.phase,
+                        site.name,
+                        batch.name,
+                        zipBlob,
+                        (percent) => {
+                            setUploadProgress(prev => ({
+                                ...prev,
+                                status: `☁️ Uploading ${batch.name} (${percent}%)...\nBatch ${batchIdx + 1} of ${zipBatches.length}`
+                            }));
+                        }
+                    );
+
+                    // Mark all photos in this batch as synced
+                    for (const photo of batch.photos) {
                         await StorageService.updatePhotoStatus(photo.id, 'synced');
-                        successCount++;
-                        uploadedFiles.push(photo.filename);
-
-                    } else {
-                        // Offline: Add to queue
-                        await SyncService.addToQueue('PHOTO', {
-                            siteId: site.id,
-                            photoId: photo.id,
-                            phase: site.phase,
-                            siteName: site.name
-                        });
-                        successCount++; // Count as success (queued)
                     }
+
+                    totalUploaded += batch.photos.length;
+                    console.log(`✅ Batch ${batchIdx + 1}/${zipBatches.length} uploaded: ${batch.name}`);
 
                 } catch (err) {
-                    console.error(`Failed to process ${photo.filename}:`, err);
-                    errors.push(`${photo.filename}: ${err.message}`);
+                    console.error(`❌ Failed batch ${batch.name}:`, err);
+                    errors.push(`${batch.name}: ${err.message}`);
                     failCount++;
                 }
             }
 
-            // Show results
+            // 4. Show results
             if (failCount === 0) {
-                const statusMsg = isOnline
-                    ? `✅ Success! ${successCount} photos uploaded to Cloud Buffer.`
-                    : `✅ Offline Mode: All ${successCount} photos queued.`;
-
                 setUploadProgress({
-                    current: pendingPhotos.length,
-                    total: pendingPhotos.length,
-                    status: statusMsg
+                    current: zipBatches.length,
+                    total: zipBatches.length,
+                    status: `✅ Success! ${totalUploaded} photos uploaded in ${zipBatches.length} zip files directly to SharePoint.`
                 });
 
-                // Update local counts immediately
-                const newPendingByReq = { ...localPendingCounts };
-                // Reset counts for synced items? Or just re-fetch?
-                // Simple re-fetch of metadata is safer
-                const updatedMeta = await StorageService.getPhotoMetadata(siteId);
-                const recalcedPending = {};
-                updatedMeta.filter(p => p.status === 'pending').forEach(p => {
-                    const reqId = p.photoReqId.toString();
-                    recalcedPending[reqId] = (recalcedPending[reqId] || 0) + 1;
-                });
-                setLocalPendingCounts(recalcedPending);
-
+                // Send email notification
+                try {
+                    const folderPath = `PHOTOS/ (${zipBatches.length} zip files)`;
+                    await EmailService.sendUploadNotification(site.name, 'photos', totalUploaded, { folderPath });
+                } catch (emailErr) {
+                    console.error('Email notification failed:', emailErr);
+                }
             } else {
                 setUploadProgress({
-                    current: pendingPhotos.length,
-                    total: pendingPhotos.length,
-                    status: `⚠️ Partial Success\n\n${successCount} done\n${failCount} failed\n\nErrors:\n${errors.slice(0, 3).join('\n')}`
+                    current: zipBatches.length,
+                    total: zipBatches.length,
+                    status: `⚠️ Partial Success\n\n${totalUploaded} photos uploaded\n${failCount} batches failed\n\nErrors:\n${errors.slice(0, 5).join('\n')}`
                 });
             }
+
+            // Refresh pending counts
+            const updatedMeta = await StorageService.getPhotoMetadata(siteId);
+            const recalcedPending = {};
+            updatedMeta.filter(p => p.status === 'pending').forEach(p => {
+                const reqId = p.photoReqId.toString();
+                recalcedPending[reqId] = (recalcedPending[reqId] || 0) + 1;
+            });
+            setLocalPendingCounts(recalcedPending);
 
             setIsUploading(false);
         } catch (error) {
@@ -394,8 +461,8 @@ function SiteDetailScreen() {
             console.error('Upload error:', error);
             setUploadProgress({
                 current: 0,
-                total: pendingPhotos.length,
-                status: `❌ Process failed: ${error.message}`
+                total: 0,
+                status: `❌ Upload failed: ${error.message}`
             });
         }
     };

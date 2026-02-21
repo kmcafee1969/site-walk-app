@@ -580,6 +580,99 @@ class SharePointService {
     }
 
     /**
+     * Upload a zip file directly to SharePoint PHOTOS folder
+     * Uses Upload Session for large file support (chunked upload)
+     * @param {string} phase - Site phase (e.g., "Phase 1")
+     * @param {string} siteName - Site name (e.g., "CO-ATWOOD")
+     * @param {string} zipFilename - Name for the zip file (e.g., "tower_close_up_part1.zip")
+     * @param {Blob} zipBlob - The zip file blob
+     * @param {function} onProgress - Optional progress callback (percent)
+     */
+    async uploadZipToSharePoint(phase, siteName, zipFilename, zipBlob, onProgress = null) {
+        try {
+            const siteId = await this.getSiteId();
+            const resolvedPath = await this.resolveSharePointPath(phase, siteName);
+            const fullPath = `${resolvedPath}/PHOTOS/${zipFilename}`;
+
+            console.log(`📦 Uploading zip: ${zipFilename} (${(zipBlob.size / 1024 / 1024).toFixed(1)} MB)`);
+            console.log(`📂 Target: ${fullPath}`);
+
+            // Get drive
+            const drives = await this.proxyRequest(`/sites/${siteId}/drives`);
+            const libraryName = sharepointConfig.sharepoint.documentLibrary;
+            const targetDrive = drives.value.find(d => d.name === libraryName);
+            if (!targetDrive) throw new Error("Drive not found");
+
+            const encodedPath = fullPath.split('/').map(s => encodeURIComponent(s)).join('/');
+
+            // Create upload session via proxy (small JSON request)
+            const createSessionUrl = `/sites/${siteId}/drives/${targetDrive.id}/root:/${encodedPath}:/createUploadSession`;
+            const session = await this.proxyRequest(createSessionUrl, 'POST', {
+                item: { "@microsoft.graph.conflictBehavior": "replace" }
+            });
+
+            const uploadUrl = session.uploadUrl;
+            console.log("Got upload session URL, uploading directly to Microsoft...");
+
+            // For files under 60MB, upload in one chunk
+            // For larger files, upload in 10MB chunks
+            const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB
+            const fileSize = zipBlob.size;
+
+            if (fileSize < 60 * 1024 * 1024) {
+                // Single chunk upload
+                const response = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Range': `bytes 0-${fileSize - 1}/${fileSize}`,
+                        'Content-Length': fileSize.toString()
+                    },
+                    body: zipBlob
+                });
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`Upload failed (${response.status}): ${errText}`);
+                }
+                if (onProgress) onProgress(100);
+            } else {
+                // Chunked upload for large files
+                let offset = 0;
+                while (offset < fileSize) {
+                    const end = Math.min(offset + CHUNK_SIZE, fileSize);
+                    const chunk = zipBlob.slice(offset, end);
+
+                    const response = await fetch(uploadUrl, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Range': `bytes ${offset}-${end - 1}/${fileSize}`,
+                            'Content-Length': (end - offset).toString()
+                        },
+                        body: chunk
+                    });
+
+                    if (!response.ok && response.status !== 308) {
+                        const errText = await response.text();
+                        throw new Error(`Chunk upload failed at ${offset} (${response.status}): ${errText}`);
+                    }
+
+                    offset = end;
+                    if (onProgress) {
+                        onProgress(Math.round((offset / fileSize) * 100));
+                    }
+                    console.log(`  Chunk uploaded: ${(offset / 1024 / 1024).toFixed(1)} / ${(fileSize / 1024 / 1024).toFixed(1)} MB`);
+                }
+            }
+
+            console.log(`✅ Zip uploaded successfully: ${fullPath}`);
+            return true;
+        } catch (error) {
+            console.error('Error uploading zip to SharePoint:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Upload Zip file containing all photos
      */
     async uploadZip(phase, siteName, siteId, zipFilename, zipBlob) {
