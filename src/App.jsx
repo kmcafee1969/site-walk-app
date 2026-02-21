@@ -15,7 +15,7 @@ import { SyncService } from './services/SyncService';
 // Version for deployment debugging
 // Version for deployment debugging
 // Version for deployment debugging
-const APP_VERSION = 'v2.7.0-Supabase-20260218';
+const APP_VERSION = 'v2.8.0-ZipUpload-20260220';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
