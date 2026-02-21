@@ -383,7 +383,7 @@ function SiteDetailScreen() {
 
                     const zipBlob = await zip.generateAsync({
                         type: 'blob',
-                        compression: 'STORED' // No compression for JPEGs (already compressed)
+                        compression: 'STORE' // No compression for JPEGs (already compressed)
                     });
 
                     const sizeMB = (zipBlob.size / 1024 / 1024).toFixed(1);
