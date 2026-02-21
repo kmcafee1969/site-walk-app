@@ -592,7 +592,7 @@ class SharePointService {
         try {
             const siteId = await this.getSiteId();
             const resolvedPath = await this.resolveSharePointPath(phase, siteName);
-            const fullPath = `${resolvedPath}/PHOTOS/${zipFilename}`;
+            const fullPath = `${resolvedPath}/${zipFilename}`;
 
             console.log(`📦 Uploading zip: ${zipFilename} (${(zipBlob.size / 1024 / 1024).toFixed(1)} MB)`);
             console.log(`📂 Target: ${fullPath}`);
