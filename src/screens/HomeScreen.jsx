@@ -354,7 +354,7 @@ function HomeScreen({ sites, onRefresh, onLogout }) {
                 borderTop: '1px solid #eee',
                 marginTop: '20px'
             }}>
-                App Version: v2.8.0 | Build: 2026-02-20
+                App Version: v2.8.2-RecoveryDeploy | Build: 2026-03-13
                 <div style={{ marginTop: '10px' }}>
                     <Link to="/recovery" style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 'bold' }}>
                         Storage Diagnostics & Recovery
