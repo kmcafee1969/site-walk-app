@@ -213,6 +213,11 @@ function HomeScreen({ sites, onRefresh, onLogout }) {
                                 >
                                     Test Connection
                                 </button>
+                                <div style={{ marginTop: '8px' }}>
+                                    <Link to="/recovery" className="bg-blue-100 px-3 py-1 rounded text-xs border border-blue-200 text-blue-700 font-bold block text-center">
+                                        View Stored Photos (Recovery)
+                                    </Link>
+                                </div>
                                 <div id="home-logs" className="bg-gray-100 p-2 rounded text-xs h-32 overflow-y-auto font-mono text-black mt-2 hidden"></div>
                             </details>
                         </div>
@@ -350,6 +355,11 @@ function HomeScreen({ sites, onRefresh, onLogout }) {
                 marginTop: '20px'
             }}>
                 App Version: v2.8.0 | Build: 2026-02-20
+                <div style={{ marginTop: '10px' }}>
+                    <Link to="/recovery" style={{ color: '#1976d2', textDecoration: 'none', fontWeight: 'bold' }}>
+                        Storage Diagnostics & Recovery
+                    </Link>
+                </div>
             </div>
         </div>
     );

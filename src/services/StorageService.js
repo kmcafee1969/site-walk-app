@@ -4,9 +4,22 @@ import { openDB } from 'idb';
 const DB_NAME = 'site-walk-db';
 const DB_VERSION = 2;
 
+let dbPromise = null;
+
 export const StorageService = {
     async getDB() {
-        return openDB(DB_NAME, DB_VERSION, {
+        if (dbPromise) {
+            try {
+                const db = await dbPromise;
+                // Check if connection is actually open
+                if (db.objectStoreNames) return db;
+            } catch (err) {
+                console.warn('Stored DB promise failed, reopening...', err);
+                dbPromise = null;
+            }
+        }
+
+        dbPromise = openDB(DB_NAME, DB_VERSION, {
             upgrade(db) {
                 // Sites store
                 if (!db.objectStoreNames.contains('sites')) {
@@ -36,7 +49,32 @@ export const StorageService = {
                     queueStore.createIndex('created', 'created', { unique: false });
                 }
             },
+            blocked() {
+                console.warn('IDB open blocked. Please close other tabs.');
+            },
+            blocking() {
+                console.warn('IDB blocking. Closing connection for upgrade.');
+                if (dbPromise) {
+                    dbPromise.then(db => db.close());
+                    dbPromise = null;
+                }
+            },
+            terminated() {
+                console.error('IDB connection terminated unexpectedly.');
+                dbPromise = null;
+            }
         });
+
+        return dbPromise;
+    },
+
+    async close() {
+        if (dbPromise) {
+            const db = await dbPromise;
+            db.close();
+            dbPromise = null;
+            console.log('IDB connection closed.');
+        }
     },
 
     // Sites

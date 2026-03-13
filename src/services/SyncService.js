@@ -2,6 +2,13 @@ import { StorageService } from './StorageService';
 import SharePointService from './SharePointService';
 import { SupabaseService } from './SupabaseService';
 
+export const fetchWithTimeout = async (promise, timeoutMs = 15000) => {
+    const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Network request timed out')), timeoutMs)
+    );
+    return Promise.race([promise, timeout]);
+};
+
 export const SyncService = {
     isOnline() {
         return navigator.onLine;
@@ -124,7 +131,7 @@ export const SyncService = {
             console.log(`Reconciling photos for ${siteName}...`);
 
             // 1. Get server files
-            const serverFiles = await SharePointService.listFiles(phase, siteName);
+            const serverFiles = await fetchWithTimeout(SharePointService.listFiles(phase, siteName), 20000);
             const serverFilenames = new Set(serverFiles.map(f => f.name));
 
             // 2. Get local photos
@@ -327,7 +334,7 @@ export const SyncService = {
         if (!this.isOnline()) return { success: false, error: 'Device is offline' };
         try {
             console.log('Syncing sites from Supabase...');
-            const sites = await SupabaseService.getSites();
+            const sites = await fetchWithTimeout(SupabaseService.getSites());
             await StorageService.saveSites(sites);
             console.log(`Synced ${sites.length} sites from Supabase`);
             return { success: true };
@@ -341,7 +348,7 @@ export const SyncService = {
         if (!this.isOnline()) return { success: false, error: 'Device is offline' };
         try {
             console.log('Syncing requirements from Supabase...');
-            const reqs = await SupabaseService.getPhotoRequirements();
+            const reqs = await fetchWithTimeout(SupabaseService.getPhotoRequirements());
             await StorageService.savePhotoRequirements(reqs);
             console.log(`Synced ${reqs.length} requirements from Supabase`);
             return { success: true };

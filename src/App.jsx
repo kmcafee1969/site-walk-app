@@ -6,6 +6,7 @@ import SiteDetailScreen from './screens/SiteDetailScreen';
 import PhotoCaptureScreen from './screens/PhotoCaptureScreen';
 import QuestionnaireScreen from './screens/QuestionnaireScreen';
 import DataLoadScreen from './screens/DataLoadScreen';
+import StorageRecoveryScreen from './screens/StorageRecoveryScreen';
 
 import { StorageService } from './services/StorageService';
 import AuthService from './services/AuthService';
@@ -76,6 +77,7 @@ function App() {
         PinAuthService.logout();
         setIsPinAuthenticated(false);
         SessionService.stopMonitoring(); // Stop monitoring on logout
+        StorageService.close().catch(console.error); // Cleanly close DB connection
     };
 
     useEffect(() => {
@@ -213,7 +215,43 @@ function App() {
                     }}></div>
                     <h2>Connecting to Database...</h2>
                     <p>Syncing Site List and Requirements</p>
-                    <p style={{ fontSize: '12px', opacity: 0.8, marginTop: '8px' }}>Powered by Supabase</p>
+                    
+                    <div style={{ marginTop: '30px', display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+                        <button
+                            onClick={() => setIsLoading(false)}
+                            style={{
+                                padding: '12px 24px',
+                                backgroundColor: 'rgba(255,255,255,0.2)',
+                                color: 'white',
+                                border: '1px solid rgba(255,255,255,0.5)',
+                                borderRadius: '8px',
+                                fontSize: '14px',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            Skip Sync & Load Offline
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                if (window.confirm('This will log you out and clear app settings. Photos will NOT be deleted. Proceed?')) {
+                                    localStorage.clear();
+                                    window.location.reload(true);
+                                }
+                            }}
+                            style={{
+                                padding: '8px 16px',
+                                backgroundColor: 'transparent',
+                                color: 'rgba(255,255,255,0.6)',
+                                border: 'none',
+                                textDecoration: 'underline',
+                                fontSize: '11px'
+                            }}
+                        >
+                            Emergency: Reset App & Clear Cache
+                        </button>
+                    </div>
+                    <p style={{ fontSize: '12px', opacity: 0.8, marginTop: '20px' }}>Powered by Supabase</p>
                     <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
                 </div>
             </div>
@@ -282,6 +320,7 @@ function App() {
                         <Route path="/site/:siteId" element={<SiteDetailScreen />} />
                         <Route path="/site/:siteId/photo/:photoReqId" element={<PhotoCaptureScreen />} />
                         <Route path="/site/:siteId/questionnaire" element={<QuestionnaireScreen />} />
+                        <Route path="/recovery" element={<StorageRecoveryScreen />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                 </BrowserRouter>

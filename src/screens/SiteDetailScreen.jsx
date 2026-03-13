@@ -4,7 +4,7 @@ import { StorageService } from '../services/StorageService';
 import SharePointService from '../services/SharePointService';
 import EmailService from '../services/EmailService';
 import { sharepointConfig } from '../config/sharepoint.config';
-import { SyncService } from '../services/SyncService';
+import { SyncService, fetchWithTimeout } from '../services/SyncService';
 import { SupabaseService } from '../services/SupabaseService';
 import JSZip from 'jszip';
 
@@ -92,7 +92,7 @@ function SiteDetailScreen() {
                     appendLog('Checking SharePoint for uploaded photos...');
 
                     // List items in PHOTOS folder (includes subfolders and files)
-                    const items = await SharePointService.listFiles(currentSite.phase, currentSite.name, 'PHOTOS');
+                    const items = await fetchWithTimeout(SharePointService.listFiles(currentSite.phase, currentSite.name, 'PHOTOS'), 15000);
                     appendLog(`SharePoint PHOTOS folder has ${items.length} items`);
 
                     // Build a map of sanitized requirement names to requirement IDs
@@ -123,11 +123,11 @@ function SiteDetailScreen() {
                         const folderPromises = folders.map(async (folder) => {
                             try {
                                 const folderPath = `PHOTOS/${folder.name}`;
-                                const folderFiles = await SharePointService.listFiles(
+                                const folderFiles = await fetchWithTimeout(SharePointService.listFiles(
                                     currentSite.phase,
                                     currentSite.name,
                                     folderPath
-                                );
+                                ), 10000);
                                 const photoFiles = folderFiles.filter(f => !f.name.endsWith('.zip'));
                                 return { folder, files: photoFiles };
                             } catch (err) {
@@ -473,7 +473,32 @@ function SiteDetailScreen() {
     };
 
     if (!site) {
-        return <div className="spinner"></div>;
+        return (
+            <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', padding: '20px', textAlign: 'center' }}>
+                <div className="spinner" style={{ marginBottom: '20px' }}></div>
+                <h2 style={{ fontSize: '18px', color: '#333' }}>Loading Site Data...</h2>
+                <div style={{ marginTop: '30px', display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+                    <button 
+                        onClick={() => navigate('/')}
+                        style={{ padding: '15px', backgroundColor: '#757575', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}
+                    >
+                        ← Return to Site List
+                    </button>
+                    <button 
+                        onClick={() => {
+                            StorageService.getSites().then(sites => {
+                                const s = sites.find(x => x.id.toString() === siteId);
+                                if (s) setSite(s);
+                                else navigate('/');
+                            });
+                        }}
+                        style={{ padding: '15px', backgroundColor: '#1976d2', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}
+                    >
+                        Force Load from Storage
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     const mapsUrl = `https://www.google.com/maps?q=${site.latitude},${site.longitude}`;
