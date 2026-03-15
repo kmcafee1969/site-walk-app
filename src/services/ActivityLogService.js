@@ -22,7 +22,10 @@ class ActivityLogService {
      * @param {string|object} details - Additional context or error message
      */
     async log(action, details = null) {
-        if (!supabase) return;
+        if (!supabase) {
+            console.warn('ActivityLogService: Supabase not initialized');
+            return;
+        }
 
         try {
             // Read user info directly from localStorage to avoid circular dependency with PinAuthService
@@ -36,10 +39,12 @@ class ActivityLogService {
                     username = parsed.username || 'anonymous';
                     displayName = parsed.display_name || 'Anonymous User';
                 } catch (e) {
-                    console.warn('Failed to parse user data for logging');
+                    console.warn('ActivityLogService: Failed to parse user data from localStorage');
                 }
             }
             
+            console.log(`ActivityLogService: Logging [${action}] by [${username}]`, details);
+
             // Format details as string if it's an object
             let detailsStr = details;
             if (typeof details === 'object' && details !== null) {
@@ -69,10 +74,12 @@ class ActivityLogService {
                 ]);
 
             if (error) {
-                console.error('Failed to write activity log:', error);
+                console.error('ActivityLogService: Supabase insert error:', error);
+            } else {
+                console.log(`ActivityLogService: Log [${action}] sent successfully`);
             }
         } catch (err) {
-            console.error('Exception writing activity log:', err);
+            console.error('ActivityLogService: Fatal error in log():', err);
         }
     }
 
