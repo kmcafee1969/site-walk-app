@@ -1,16 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { createClient } from '@supabase/supabase-js';
-import ActivityLogService from '../services/ActivityLogService';
+import { supabase } from '../services/SupabaseService';
 
+const APP_ID = import.meta.env.VITE_APP_ID;
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const APP_ID = import.meta.env.VITE_APP_ID;
-
-let supabase = null;
-if (supabaseUrl && supabaseAnonKey) {
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
-}
 
 function ActivityLogsScreen() {
     const navigate = useNavigate();
@@ -74,7 +66,8 @@ function ActivityLogsScreen() {
         ERRORS: logs.filter(l => l.action.includes('ERROR') || l.action.includes('FAILED')).length,
         SYNC: logs.filter(l => l.action.includes('SYNC')).length,
         PHOTOS: logs.filter(l => l.action.includes('PHOTO')).length,
-        LOGINS: logs.filter(l => l.action.includes('LOGIN')).length
+        LOGINS: logs.filter(l => l.action.includes('LOGIN')).length,
+        DIAG: logs.filter(l => l.action.includes('DIAG')).length
     };
 
     const filteredLogs = logs.filter(log => {
@@ -83,6 +76,7 @@ function ActivityLogsScreen() {
         if (filter === 'SYNC') return log.action.includes('SYNC');
         if (filter === 'PHOTOS') return log.action.includes('PHOTO');
         if (filter === 'LOGINS') return log.action.includes('LOGIN');
+        if (filter === 'DIAG') return log.action.includes('DIAG');
         return true;
     });
 
@@ -132,7 +126,7 @@ function ActivityLogsScreen() {
                 )}
 
                 <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px', marginBottom: '15px' }}>
-                    {['ALL', 'ERRORS', 'SYNC', 'PHOTOS', 'LOGINS'].map(f => (
+                    {['ALL', 'ERRORS', 'SYNC', 'PHOTOS', 'LOGINS', 'DIAG'].map(f => (
                         <button
                             key={f}
                             onClick={() => setFilter(f)}
