@@ -1,6 +1,7 @@
 import { StorageService } from './StorageService';
 import SharePointService from './SharePointService';
 import { SupabaseService } from './SupabaseService';
+import ActivityLogService from './ActivityLogService';
 
 export const fetchWithTimeout = async (promise, timeoutMs = 15000) => {
     const timeout = new Promise((_, reject) =>
@@ -334,12 +335,15 @@ export const SyncService = {
         if (!this.isOnline()) return { success: false, error: 'Device is offline' };
         try {
             console.log('Syncing sites from Supabase...');
+            ActivityLogService.logSync('SITES', 'STARTED');
             const sites = await fetchWithTimeout(SupabaseService.getSites());
             await StorageService.saveSites(sites);
             console.log(`Synced ${sites.length} sites from Supabase`);
+            ActivityLogService.logSync('SITES', 'SUCCESS', { count: sites.length });
             return { success: true };
         } catch (error) {
             console.error('Sync sites error:', error);
+            ActivityLogService.logSync('SITES', 'FAILED', { error: error.message || String(error) });
             return { success: false, error: error.message || String(error) };
         }
     },
@@ -348,12 +352,15 @@ export const SyncService = {
         if (!this.isOnline()) return { success: false, error: 'Device is offline' };
         try {
             console.log('Syncing requirements from Supabase...');
+            ActivityLogService.logSync('REQS', 'STARTED');
             const reqs = await fetchWithTimeout(SupabaseService.getPhotoRequirements());
             await StorageService.savePhotoRequirements(reqs);
             console.log(`Synced ${reqs.length} requirements from Supabase`);
+            ActivityLogService.logSync('REQS', 'SUCCESS', { count: reqs.length });
             return { success: true };
         } catch (error) {
             console.error('Sync requirements error:', error);
+            ActivityLogService.logSync('REQS', 'FAILED', { error: error.message || String(error) });
             return { success: false, error: error.message || String(error) };
         }
     },

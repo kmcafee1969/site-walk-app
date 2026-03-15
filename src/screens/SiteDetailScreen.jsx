@@ -6,6 +6,7 @@ import EmailService from '../services/EmailService';
 import { sharepointConfig } from '../config/sharepoint.config';
 import { SyncService, fetchWithTimeout } from '../services/SyncService';
 import { SupabaseService } from '../services/SupabaseService';
+import ActivityLogService from '../services/ActivityLogService';
 import JSZip from 'jszip';
 
 function SiteDetailScreen() {
@@ -291,6 +292,8 @@ function SiteDetailScreen() {
             return;
         }
 
+        ActivityLogService.log('PHOTO_UPLOAD_START', { siteName: site.name, phase: site.phase, pendingCount: pendingPhotos.length });
+
         setShowUploadModal(true);
         setIsUploading(true);
 
@@ -415,9 +418,11 @@ function SiteDetailScreen() {
 
                     totalUploaded += batch.photos.length;
                     console.log(`✅ Batch ${batchIdx + 1}/${zipBatches.length} uploaded: ${batch.name}`);
+                    ActivityLogService.logPhotoUpload('SUCCESS', batch.name, { count: batch.photos.length, sizeMB });
 
                 } catch (err) {
                     console.error(`❌ Failed batch ${batch.name}:`, err);
+                    ActivityLogService.logPhotoUpload('FAILED', batch.name, { error: err.message });
                     errors.push(`${batch.name}: ${err.message}`);
                     failCount++;
                 }
@@ -430,6 +435,8 @@ function SiteDetailScreen() {
                     total: zipBatches.length,
                     status: `✅ Success! ${totalUploaded} photos uploaded in ${zipBatches.length} zip files directly to SharePoint.`
                 });
+                
+                ActivityLogService.logPhotoUpload('COMPLETED_ALL', 'all_batches', { totalUploaded, batches: zipBatches.length });
 
                 // Send email notification
                 try {
@@ -458,6 +465,7 @@ function SiteDetailScreen() {
             setIsUploading(false);
         } catch (error) {
             setIsUploading(false);
+            ActivityLogService.logError('PHOTO_UPLOAD_FATAL', error.message || String(error));
             console.error('Upload error:', error);
             setUploadProgress({
                 current: 0,

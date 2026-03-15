@@ -7,6 +7,7 @@ import PhotoCaptureScreen from './screens/PhotoCaptureScreen';
 import QuestionnaireScreen from './screens/QuestionnaireScreen';
 import DataLoadScreen from './screens/DataLoadScreen';
 import StorageRecoveryScreen from './screens/StorageRecoveryScreen';
+import ActivityLogsScreen from './screens/ActivityLogsScreen';
 
 import { StorageService } from './services/StorageService';
 import AuthService from './services/AuthService';
@@ -15,6 +16,8 @@ import { SyncService } from './services/SyncService';
 
 // Version for deployment debugging
 const APP_VERSION = 'v2.8.2-RecoveryDeploy-20260313';
+
+import ActivityLogService from './services/ActivityLogService';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
@@ -29,6 +32,11 @@ class ErrorBoundary extends React.Component {
 
     componentDidCatch(error, errorInfo) {
         console.error('App Error:', error, errorInfo);
+        ActivityLogService.logError('FATAL_APP_CRASH', { 
+            message: error.message, 
+            stack: error.stack,
+            componentStack: errorInfo.componentStack 
+        });
     }
 
     render() {
@@ -314,7 +322,8 @@ function App() {
                                 />
                             }
                         />
-                        <Route path="/admin" element={<DataLoadScreen onDataLoaded={handleDataLoaded} />} />
+                        <Route path="/admin/data-load" element={<DataLoadScreen onDataLoaded={handleDataLoaded} />} />
+                        <Route path="/admin" element={<ActivityLogsScreen />} />
                         <Route path="/site/:siteId" element={<SiteDetailScreen />} />
                         <Route path="/site/:siteId/photo/:photoReqId" element={<PhotoCaptureScreen />} />
                         <Route path="/site/:siteId/questionnaire" element={<QuestionnaireScreen />} />

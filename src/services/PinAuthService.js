@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import ActivityLogService from './ActivityLogService';
 
 const USER_AUTH_KEY = 'rmr_cop_user_auth';
 const USER_DATA_KEY = 'rmr_cop_user_data';
@@ -96,10 +97,12 @@ class PinAuthService {
 
             if (error && error.code !== 'PGRST116') {
                 console.error('Login error:', error);
+                ActivityLogService.logLogin(false, `System error: ${error.message}`);
                 return { success: false, error: 'Login failed. Please try again.' };
             }
 
             if (!data) {
+                ActivityLogService.logLogin(false, `Invalid credentials for username: ${username}`);
                 return { success: false, error: 'Invalid username or PIN.' };
             }
 
@@ -111,6 +114,11 @@ class PinAuthService {
                 display_name: data.display_name,
                 role: data.role
             }));
+
+            // We must wait a tiny bit for the localStorage to take effect so ActivityLogService can read the username
+            setTimeout(() => {
+                ActivityLogService.logLogin(true);
+            }, 100);
 
             return { success: true, user: data };
 
@@ -124,6 +132,7 @@ class PinAuthService {
      * Logout (clear user auth)
      */
     logout() {
+        ActivityLogService.log('LOGOUT', 'User logged out');
         localStorage.removeItem(USER_AUTH_KEY);
         localStorage.removeItem(USER_DATA_KEY);
     }

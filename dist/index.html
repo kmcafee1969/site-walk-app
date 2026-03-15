@@ -20,13 +20,35 @@
   <meta name="apple-mobile-web-app-title" content="RMR COP" />
 
   <title>RMR Enterprises COP App</title>
-  <script type="module" crossorigin src="/assets/index-DUbcjKOE.js"></script>
+  <script type="module" crossorigin src="/assets/index-mNTRgafO.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-CYJm70aa.css">
-<link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
+<link rel="manifest" href="/manifest.webmanifest"></head>
 
 
 <body>
-  <div id="root"></div>
+  <div id="root"></div>
+  
+  <div id="emergency-recovery" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:white; z-index:9999; padding:20px; text-align:center; box-sizing:border-box; font-family:-apple-system, sans-serif;">
+    <h2 style="color:#d32f2f;">⚠️ App Failed to Load</h2>
+    <p style="margin-bottom:20px;">The application is taking too long to start. This might be due to a corrupted update or a browser cache issue.</p>
+    <a href="/recovery" style="display:block; background:#1976d2; color:white; padding:15px; border-radius:8px; text-decoration:none; font-weight:bold; margin-bottom:15px;">Launch Storage Recovery</a>
+    <button onclick="window.location.reload(true)" style="width:100%; background:#757575; color:white; padding:15px; border-radius:8px; border:none; font-weight:bold; margin-bottom:15px;">Force App Reload</button>
+    <div style="background:#fff9c4; padding:15px; border-radius:8px; text-align:left; font-size:12px; border:1px solid #fbc02d;">
+      <strong>Note:</strong> Recovering storage will let you see photos trapped in this app's memory. Do not delete the home screen icon until you have verified your photos are synced!
+    </div>
+  </div>
+
+  <script>
+    // Emergency watchdog: if React doesn't mount and set window.APP_LOADED in 8s, show recovery
+    window.APP_LOADED = false;
+    setTimeout(function() {
+      if (!window.APP_LOADED) {
+        var el = document.getElementById('emergency-recovery');
+        if (el) el.style.display = 'block';
+      }
+    }, 8000);
+  </script>
+
 </body>
 
 </html>
