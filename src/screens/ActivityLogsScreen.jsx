@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
 import ActivityLogService from '../services/ActivityLogService';
