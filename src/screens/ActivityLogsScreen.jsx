@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
+import ActivityLogService from '../services/ActivityLogService';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const APP_ID = import.meta.env.VITE_APP_ID;
 
 let supabase = null;
 if (supabaseUrl && supabaseAnonKey) {
@@ -164,6 +165,20 @@ function ActivityLogsScreen() {
                         style={{ padding: '8px 16px', backgroundColor: '#e0e0e0', color: '#333', border: 'none', borderRadius: '20px', cursor: 'pointer', marginLeft: 'auto' }}
                     >
                         🔄 Refresh
+                    </button>
+                </div>
+
+                {/* Diagnostics Panel */}
+                <div style={{ padding: '12px', backgroundColor: '#eee', borderRadius: '8px', marginBottom: '15px', fontSize: '12px', color: '#666', display: 'flex', flexWrap: 'wrap', gap: '15px', alignItems: 'center' }}>
+                    <div><strong>Env:</strong> URL: {supabaseUrl ? '✅' : '❌'} | Key: {supabaseAnonKey ? '✅' : '❌'} | AppID: {APP_ID || 'null'}</div>
+                    <button 
+                        onClick={async () => {
+                            await ActivityLogService.logTest();
+                            setTimeout(fetchLogs, 1000);
+                        }}
+                        style={{ padding: '4px 10px', backgroundColor: '#2196f3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                    >
+                        🧪 Send Test Log
                     </button>
                 </div>
 

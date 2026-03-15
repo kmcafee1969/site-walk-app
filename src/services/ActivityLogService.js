@@ -1,16 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from './SupabaseService';
 
-// Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Environment variables
 const APP_ID = import.meta.env.VITE_APP_ID;
-
 const USER_DATA_KEY = 'rmr_cop_user_data';
-
-let supabase = null;
-if (supabaseUrl && supabaseAnonKey) {
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
-}
 
 // Ensure this matches App.jsx or package.json
 const APP_VERSION = 'v2.8.2-RecoveryDeploy-20260313';
@@ -23,7 +15,7 @@ class ActivityLogService {
      */
     async log(action, details = null) {
         if (!supabase) {
-            console.warn('ActivityLogService: Supabase not initialized');
+            console.warn('ActivityLogService: Supabase client not available');
             return;
         }
 
@@ -43,7 +35,7 @@ class ActivityLogService {
                 }
             }
             
-            console.log(`ActivityLogService: Logging [${action}] by [${username}]`, details);
+            console.log(`ActivityLogService: Attempting to log [${action}] for [${username}]`);
 
             // Format details as string if it's an object
             let detailsStr = details;
@@ -57,8 +49,8 @@ class ActivityLogService {
                  detailsStr = '';
             }
 
-            // Safety check for APP_ID
-            const appIdToUse = (APP_ID && APP_ID !== '') ? APP_ID : null;
+            // Safety check for APP_ID - ensure it's a valid string or null
+            const appIdToUse = (APP_ID && typeof APP_ID === 'string' && APP_ID.length > 5) ? APP_ID : null;
 
             const { error } = await supabase
                 .from('activity_logs')
@@ -79,8 +71,13 @@ class ActivityLogService {
                 console.log(`ActivityLogService: Log [${action}] sent successfully`);
             }
         } catch (err) {
-            console.error('ActivityLogService: Fatal error in log():', err);
+            console.error('ActivityLogService: Fatal exception in log():', err);
         }
+    }
+
+    // Diagnostic test
+    async logTest() {
+        return this.log('DIAGNOSTIC_TEST', { timestamp: new Date().toISOString(), message: 'Manually triggered test log' });
     }
 
     // Helper functions for common events
