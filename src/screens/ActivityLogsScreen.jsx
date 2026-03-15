@@ -67,6 +67,14 @@ function ActivityLogsScreen() {
         }
     };
 
+    const counts = {
+        ALL: logs.length,
+        ERRORS: logs.filter(l => l.action.includes('ERROR') || l.action.includes('FAILED')).length,
+        SYNC: logs.filter(l => l.action.includes('SYNC')).length,
+        PHOTOS: logs.filter(l => l.action.includes('PHOTO')).length,
+        LOGINS: logs.filter(l => l.action.includes('LOGIN')).length
+    };
+
     const filteredLogs = logs.filter(log => {
         if (filter === 'ALL') return true;
         if (filter === 'ERRORS') return log.action.includes('ERROR') || log.action.includes('FAILED');
@@ -128,10 +136,21 @@ function ActivityLogsScreen() {
                                 borderRadius: '20px',
                                 fontWeight: filter === f ? 'bold' : 'normal',
                                 whiteSpace: 'nowrap',
-                                cursor: 'pointer'
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
                             }}
                         >
                             {f === 'ALL' ? 'All Activity' : f}
+                            <span style={{ 
+                                backgroundColor: filter === f ? 'rgba(255,255,255,0.2)' : '#eee', 
+                                padding: '2px 6px', 
+                                borderRadius: '10px',
+                                fontSize: '11px'
+                            }}>
+                                {counts[f]}
+                            </span>
                         </button>
                     ))}
                     <button 

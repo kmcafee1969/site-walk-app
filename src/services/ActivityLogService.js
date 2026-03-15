@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
-import PinAuthService from './PinAuthService';
 
 // Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const APP_ID = import.meta.env.VITE_APP_ID;
+
+const USER_DATA_KEY = 'rmr_cop_user_data';
 
 let supabase = null;
 if (supabaseUrl && supabaseAnonKey) {
@@ -21,13 +22,23 @@ class ActivityLogService {
      * @param {string|object} details - Additional context or error message
      */
     async log(action, details = null) {
-        if (!supabase) return; // Fail silently if no connection
+        if (!supabase) return;
 
         try {
-            // Get current user info if available
-            const user = PinAuthService.getCurrentUser();
-            const username = user ? user.username : 'anonymous';
-            const displayName = user ? user.display_name : 'Anonymous User';
+            // Read user info directly from localStorage to avoid circular dependency with PinAuthService
+            const userData = localStorage.getItem(USER_DATA_KEY);
+            let username = 'anonymous';
+            let displayName = 'Anonymous User';
+            
+            if (userData) {
+                try {
+                    const parsed = JSON.parse(userData);
+                    username = parsed.username || 'anonymous';
+                    displayName = parsed.display_name || 'Anonymous User';
+                } catch (e) {
+                    console.warn('Failed to parse user data for logging');
+                }
+            }
             
             // Format details as string if it's an object
             let detailsStr = details;
@@ -41,6 +52,9 @@ class ActivityLogService {
                  detailsStr = '';
             }
 
+            // Safety check for APP_ID
+            const appIdToUse = (APP_ID && APP_ID !== '') ? APP_ID : null;
+
             const { error } = await supabase
                 .from('activity_logs')
                 .insert([
@@ -50,7 +64,7 @@ class ActivityLogService {
                         action: action,
                         details: detailsStr,
                         app_version: APP_VERSION,
-                        app_id: APP_ID
+                        app_id: appIdToUse
                     }
                 ]);
 
@@ -64,7 +78,7 @@ class ActivityLogService {
 
     // Helper functions for common events
     logLogin(success, errorMsg = null) {
-        this.log(success ? 'LOGIN_SUCCESS' : 'LOGIN_FAILED', errorMsg || 'User logged in successfully');
+        this.log(success ? 'LOGIN_SUCCESS' : 'LOGIN_FAILED', errorMsg || (success ? 'User logged in successfully' : 'Login failed'));
     }
 
     logSync(type, status, details = null) {
