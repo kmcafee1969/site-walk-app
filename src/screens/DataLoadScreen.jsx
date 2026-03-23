@@ -160,8 +160,23 @@ function DataLoadScreen({ onDataLoaded }) {
     return (
         <div>
             <div className="header">
-                <div className="container">
+                <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h1>📱 Viaero Site Walk</h1>
+                    <button 
+                        onClick={() => navigate('/admin/logs')}
+                        style={{
+                            background: 'rgba(255,255,255,0.2)',
+                            border: '1px solid rgba(255,255,255,0.3)',
+                            color: 'white',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            fontWeight: '500'
+                        }}
+                    >
+                        📋 View Logs
+                    </button>
                 </div>
             </div>
 

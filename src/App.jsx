@@ -322,8 +322,9 @@ function App() {
                                 />
                             }
                         />
-                        <Route path="/admin/data-load" element={<DataLoadScreen onDataLoaded={handleDataLoaded} />} />
-                        <Route path="/admin" element={<ActivityLogsScreen />} />
+                        <Route path="/admin" element={<DataLoadScreen onDataLoaded={handleDataLoaded} />} />
+                        <Route path="/admin/data-load" element={<Navigate to="/admin" replace />} />
+                        <Route path="/admin/logs" element={<ActivityLogsScreen />} />
                         <Route path="/site/:siteId" element={<SiteDetailScreen />} />
                         <Route path="/site/:siteId/photo/:photoReqId" element={<PhotoCaptureScreen />} />
                         <Route path="/site/:siteId/questionnaire" element={<QuestionnaireScreen />} />

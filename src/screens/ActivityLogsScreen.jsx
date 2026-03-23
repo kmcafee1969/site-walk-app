@@ -107,7 +107,7 @@ function ActivityLogsScreen() {
                 gap: '12px'
             }}>
                 <button 
-                    onClick={() => navigate('/admin/data-load')} 
+                    onClick={() => navigate('/admin')} 
                     style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px' }}
                 >
                     ←
