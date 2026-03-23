@@ -413,7 +413,7 @@ function QuestionnaireScreen() {
             <div className="header">
                 <div className="container" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <button
-                        onClick={() => navigate(-1)}
+                        onClick={() => navigate(`/site/${siteId}`)}
                         style={{ background: 'none', border: 'none', color: 'white', fontSize: '24px', cursor: 'pointer' }}
                     >
                         ←

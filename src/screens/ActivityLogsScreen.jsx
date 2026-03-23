@@ -107,13 +107,7 @@ function ActivityLogsScreen() {
                 gap: '12px'
             }}>
                 <button 
-                    onClick={() => {
-                        if (window.history.length > 1) {
-                            navigate(-1);
-                        } else {
-                            navigate('/');
-                        }
-                    }} 
+                    onClick={() => navigate('/')} 
                     style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px' }}
                 >
                     ←
