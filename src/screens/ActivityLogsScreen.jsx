@@ -1,4 +1,8 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/SupabaseService';
+import ActivityLogService from '../services/ActivityLogService';
+
 
 const APP_ID = import.meta.env.VITE_APP_ID;
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
